@@ -1,0 +1,16 @@
+syntax = "proto3";
+package msgpb;
+
+message Header {
+    uint64 high = 1;
+    uint64 low = 2;
+}
+
+message Message {
+  Header header = 1;
+  bytes value = 2;
+}
+
+message Ack {
+  repeated Header headers = 1;
+}
