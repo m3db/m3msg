@@ -90,44 +90,81 @@ type ConnectionEncodeDecoderAlloc func() ConnectionEncodeDecoder
 
 // EncodeDecoderOptions configures an EncodeDecoder.
 type EncodeDecoderOptions interface {
+	// BytesPool returns the bytes pool.
 	BytesPool() pool.BytesPool
+
+	// SetBytesPool sets the bytes pool.
 	SetBytesPool(value pool.BytesPool) EncodeDecoderOptions
+
+	// BufferSize returns the size of buffer before a write or a read.
 	BufferSize() int
+
+	// SetBufferSize sets the buffer size.
 	SetBufferSize(value int) EncodeDecoderOptions
 }
 
 // ConnectionEncodeDecoderOptions configures a ConnectionEncodeDecoder.
 type ConnectionEncodeDecoderOptions interface {
+	// EncodeWithLock returns whether the encode function should be guarded with a lock.
 	EncodeWithLock() bool
+
+	// SetEncodeWithLock sets EncodeWithLock.
 	SetEncodeWithLock(value bool) ConnectionEncodeDecoderOptions
 
+	// DecodeWithLock returns whether the decode function should be guarded with a lock.
 	DecodeWithLock() bool
+
+	// SetDecodeWithLock sets DecodeWithLock.
 	SetDecodeWithLock(value bool) ConnectionEncodeDecoderOptions
 
+	// EncoderOptions returns the options for encoder.
 	EncoderOptions() EncodeDecoderOptions
+
+	// SetEncoderOptions sets the options for encoder.
 	SetEncoderOptions(value EncodeDecoderOptions) ConnectionEncodeDecoderOptions
 
+	// DecoderOptions returns the options for decoder.
 	DecoderOptions() EncodeDecoderOptions
+
+	// SetDecoderOptions sets the options for decoder.
 	SetDecoderOptions(value EncodeDecoderOptions) ConnectionEncodeDecoderOptions
 
+	// ConnectionEncodeDecoderPool returns the pool for ConnectionEncodeDecoder.
 	ConnectionEncodeDecoderPool() ConnectionEncodeDecoderPool
+
+	// SetConnectionEncodeDecoderPool sets the pool for ConnectionEncodeDecoder.
 	SetConnectionEncodeDecoderPool(pool ConnectionEncodeDecoderPool) ConnectionEncodeDecoderOptions
 }
 
 // AddressEncodeDecoderOptions configures an AddressEncodeDecoder.
 type AddressEncodeDecoderOptions interface {
+	// ConnectionEncodeDecoderOptions returns the options for ConnectionEncodeDecoder.
 	ConnectionEncodeDecoderOptions() ConnectionEncodeDecoderOptions
+
+	// SetConnectionEncodeDecoderOptions sets the options for ConnectionEncodeDecoder.
 	SetConnectionEncodeDecoderOptions(value ConnectionEncodeDecoderOptions) AddressEncodeDecoderOptions
 
+	// ConnectionRetryOptions returns the options for connection retrier.
 	ConnectionRetryOptions() retry.Options
+
+	// SetConnectionRetryOptions sets the options for connection retrier.
 	SetConnectionRetryOptions(value retry.Options) AddressEncodeDecoderOptions
 
+	// DialTimeout returns the dial timeout.
 	DialTimeout() time.Duration
+
+	// SetDialTimeout sets the dial timeout.
 	SetDialTimeout(value time.Duration) AddressEncodeDecoderOptions
 
+	// ReconnectDelay returns the delay between reconnections.
 	ReconnectDelay() time.Duration
+
+	// SetReconnectDelay sets the delay between reconnections.
 	SetReconnectDelay(value time.Duration) AddressEncodeDecoderOptions
 
+	// InstrumentOptions returns the instrument options.
 	InstrumentOptions() instrument.Options
+
+	// SetInstrumentOptions sets the instrument options.
 	SetInstrumentOptions(value instrument.Options) AddressEncodeDecoderOptions
 }
