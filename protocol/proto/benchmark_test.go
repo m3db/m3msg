@@ -42,21 +42,21 @@ func BenchmarkAddressEncodeDecoerRoundTrip(b *testing.B) {
 	a.encdec.(*connEncdec).resetReader(mimicTCP)
 	a.validConn = true
 	encodeMsg := msgpb.Message{
-		Header: &msgpb.Header{},
-		Value:  make([]byte, 200),
+		Metadata: &msgpb.Metadata{},
+		Value:    make([]byte, 200),
 	}
 	decodeMsg := msgpb.Message{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		encodeMsg.Header.Id = uint64(n)
+		encodeMsg.Metadata.Id = uint64(n)
 		if err := a.Encode(&encodeMsg); err != nil {
 			b.FailNow()
 		}
 		if err := a.Decode(&decodeMsg); err != nil {
 			b.FailNow()
 		}
-		if decodeMsg.Header.Id != uint64(n) {
+		if decodeMsg.Metadata.Id != uint64(n) {
 			b.FailNow()
 		}
 	}
@@ -72,21 +72,21 @@ func BenchmarkConnectionEncodeDecoerRoundTrip(b *testing.B) {
 	c.resetWriter(mimicTCP)
 	c.resetReader(mimicTCP)
 	encodeMsg := msgpb.Message{
-		Header: &msgpb.Header{},
-		Value:  make([]byte, 200),
+		Metadata: &msgpb.Metadata{},
+		Value:    make([]byte, 200),
 	}
 	decodeMsg := msgpb.Message{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		encodeMsg.Header.Id = uint64(n)
+		encodeMsg.Metadata.Id = uint64(n)
 		if err := c.Encode(&encodeMsg); err != nil {
 			b.FailNow()
 		}
 		if err := c.Decode(&decodeMsg); err != nil {
 			b.FailNow()
 		}
-		if decodeMsg.Header.Id != uint64(n) {
+		if decodeMsg.Metadata.Id != uint64(n) {
 			b.FailNow()
 		}
 	}
@@ -97,21 +97,21 @@ func BenchmarkEncodeDecoerRoundTrip(b *testing.B) {
 	encoder := NewEncoder(mimicTCP, NewEncodeDecoderOptions().SetBufferSize(1))
 	decoder := NewDecoder(mimicTCP, NewEncodeDecoderOptions().SetBufferSize(1))
 	encodeMsg := msgpb.Message{
-		Header: &msgpb.Header{},
-		Value:  make([]byte, 200),
+		Metadata: &msgpb.Metadata{},
+		Value:    make([]byte, 200),
 	}
 	decodeMsg := msgpb.Message{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		encodeMsg.Header.Id = uint64(n)
+		encodeMsg.Metadata.Id = uint64(n)
 		if err := encoder.Encode(&encodeMsg); err != nil {
 			b.FailNow()
 		}
 		if err := decoder.Decode(&decodeMsg); err != nil {
 			b.FailNow()
 		}
-		if decodeMsg.Header.Id != uint64(n) {
+		if decodeMsg.Metadata.Id != uint64(n) {
 			b.FailNow()
 		}
 	}
