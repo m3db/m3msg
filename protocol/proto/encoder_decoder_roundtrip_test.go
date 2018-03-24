@@ -40,8 +40,8 @@ func TestEncodeDecodeRoundTripWithoutPool(t *testing.T) {
 	require.Equal(t, 4, cap(dec.sizeBuffer))
 	encodeMsg := msgpb.Message{
 		Header: &msgpb.Header{
-			Low:  1,
-			High: 2,
+			Shard: 1,
+			Id:    2,
 		},
 		Value: make([]byte, 80),
 	}
@@ -68,8 +68,8 @@ func TestEncodeDecodeRoundTripWithPool(t *testing.T) {
 	require.Equal(t, 8, cap(dec.sizeBuffer))
 	encodeMsg := msgpb.Message{
 		Header: &msgpb.Header{
-			Low:  1,
-			High: 2,
+			Shard: 1,
+			Id:    2,
 		},
 		Value: make([]byte, 80),
 	}
@@ -91,8 +91,8 @@ func TestResetReader(t *testing.T) {
 	dec := NewDecoder(mimicTCP2, nil)
 	encodeMsg := msgpb.Message{
 		Header: &msgpb.Header{
-			Low:  1,
-			High: 2,
+			Shard: 1,
+			Id:    2,
 		},
 		Value: make([]byte, 200),
 	}
@@ -112,8 +112,8 @@ func TestResetWriter(t *testing.T) {
 	dec := NewDecoder(mimicTCP2, nil)
 	encodeMsg := msgpb.Message{
 		Header: &msgpb.Header{
-			Low:  1,
-			High: 2,
+			Shard: 1,
+			Id:    2,
 		},
 		Value: make([]byte, 200),
 	}

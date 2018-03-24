@@ -32,7 +32,6 @@ import (
 	"github.com/m3db/m3x/retry"
 
 	"github.com/uber-go/tally"
-	"go.uber.org/atomic"
 )
 
 const (
@@ -40,7 +39,7 @@ const (
 )
 
 var (
-	errNoValidConnection = errors.New("no valid connection available")
+	errNoValidConnOrClosed = errors.New("no valid connection or closed")
 )
 
 type connectFn func(addr string) (net.Conn, error)
@@ -50,7 +49,7 @@ type addrEncdec struct {
 
 	encdec              ConnectionEncodeDecoder
 	addr                string
-	validConn           *atomic.Bool // Use atomic for r/w fast path.
+	validConn           bool
 	resetCh             chan struct{}
 	resetNanos          int64
 	retrier             retry.Retrier
@@ -82,7 +81,7 @@ func NewAddressEncodeDecoder(
 	c := addrEncdec{
 		encdec:     NewConnectionEncodeDecoder(nil, opts.ConnectionEncodeDecoderOptions()),
 		addr:       addr,
-		validConn:  atomic.NewBool(false),
+		validConn:  false,
 		resetCh:    make(chan struct{}, 1),
 		resetNanos: time.Now().UnixNano(),
 		// Should retry forever on reconnect.
@@ -111,24 +110,32 @@ func newAddrEncdecMetrics(m tally.Scope) *addrEncdecMetrics {
 }
 
 func (c *addrEncdec) Encode(msg Marshaler) error {
-	if !c.hasValidConnection() {
-		return errNoValidConnection
+	c.RLock()
+	if !c.canEncodeDecodeWithLock() {
+		c.RUnlock()
+		return errNoValidConnOrClosed
 	}
 	if err := c.encdec.Encode(msg); err != nil {
+		c.RUnlock()
 		c.signalInvalidConnection()
 		return err
 	}
+	c.RUnlock()
 	return nil
 }
 
 func (c *addrEncdec) Decode(acks Unmarshaler) error {
-	if !c.hasValidConnection() {
-		return errNoValidConnection
+	c.RLock()
+	if !c.canEncodeDecodeWithLock() {
+		c.RUnlock()
+		return errNoValidConnOrClosed
 	}
 	if err := c.encdec.Decode(acks); err != nil {
+		c.RUnlock()
 		c.signalInvalidConnection()
 		return err
 	}
+	c.RUnlock()
 	return nil
 }
 
@@ -138,15 +145,15 @@ func (c *addrEncdec) Init() {
 
 func (c *addrEncdec) Close() {
 	c.Lock()
+	defer c.Unlock()
+
 	if c.closed {
-		c.Unlock()
 		return
 	}
 	c.closed = true
-	c.validConn.Store(false)
+	c.validConn = false
 	c.encdec.Close()
 	close(c.doneCh)
-	c.Unlock()
 }
 
 func (c *addrEncdec) resetConnection() {
@@ -166,7 +173,7 @@ func (c *addrEncdec) resetConnection() {
 func (c *addrEncdec) ResetAddr(addr string) {
 	c.addr = addr
 	c.resetNanos = 0
-	c.validConn.Store(false)
+	c.validConn = false
 	c.doneCh = make(chan struct{})
 	c.closed = false
 	c.cleanUpResetCh()
@@ -193,7 +200,9 @@ func (c *addrEncdec) resetConn(fn connectFn) error {
 		return err
 	}
 	c.encdec.ResetConn(conn)
-	c.validConn.Store(true)
+	c.Lock()
+	c.validConn = true
+	c.Unlock()
 	return nil
 }
 
@@ -204,7 +213,7 @@ func (c *addrEncdec) signalInvalidConnection() {
 		c.Unlock()
 		return
 	}
-	c.validConn.Store(false)
+	c.validConn = false
 	c.resetNanos = c.nowFn().UnixNano()
 	c.signalReset()
 	c.Unlock()
@@ -242,8 +251,8 @@ func (c *addrEncdec) connectWithRetryForever(addr string) (net.Conn, error) {
 	return conn, nil
 }
 
-func (c *addrEncdec) hasValidConnection() bool {
-	return c.validConn.Load()
+func (c *addrEncdec) canEncodeDecodeWithLock() bool {
+	return c.validConn && !c.closed
 }
 
 func (c *addrEncdec) isClosed() bool {

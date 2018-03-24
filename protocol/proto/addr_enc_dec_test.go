@@ -38,7 +38,7 @@ var (
 
 func TestNewAddressEncodeDecoderWithInvalidAddr(t *testing.T) {
 	c := NewAddressEncodeDecoder("badAddress", nil).(*addrEncdec)
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	require.Equal(t, 1, len(c.resetCh))
 }
 
@@ -48,21 +48,21 @@ func TestNewAddressEncodeDecoderWithValidAddr(t *testing.T) {
 	defer lis.Close()
 
 	c := NewAddressEncodeDecoder(lis.Addr().String(), nil).(*addrEncdec)
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 	require.Equal(t, 0, len(c.resetCh))
 }
 
 func TestAddressEncodeDecodeWithNoValidConnection(t *testing.T) {
 	c := NewAddressEncodeDecoder("badAddress", nil).(*addrEncdec)
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 
 	err := c.Encode(&testMsg)
 	require.Error(t, err)
-	require.Equal(t, errNoValidConnection, err)
+	require.Equal(t, errNoValidConnOrClosed, err)
 
 	err = c.Decode(&testMsg)
 	require.Error(t, err)
-	require.Equal(t, errNoValidConnection, err)
+	require.Equal(t, errNoValidConnOrClosed, err)
 }
 
 func TestSignalResetConnection(t *testing.T) {
@@ -71,21 +71,21 @@ func TestSignalResetConnection(t *testing.T) {
 	defer lis.Close()
 
 	c := NewAddressEncodeDecoder(lis.Addr().String(), NewAddressEncodeDecoderOptions().SetReconnectDelay(0)).(*addrEncdec)
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 	require.NoError(t, c.Encode(&testMsg))
 
 	c.signalInvalidConnection()
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	require.Error(t, c.Encode(&testMsg))
 	require.Equal(t, 1, len(c.resetCh))
 
 	c.signalInvalidConnection()
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	require.Equal(t, 1, len(c.resetCh))
 
 	c.reconnectDelayNanos = int64(time.Hour)
 	c.signalInvalidConnection()
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	require.Equal(t, 1, len(c.resetCh))
 }
 
@@ -95,7 +95,7 @@ func TestNoResetBeforeDelay(t *testing.T) {
 		NewAddressEncodeDecoderOptions().
 			SetReconnectDelay(time.Hour),
 	).(*addrEncdec)
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	require.Error(t, c.Encode(&testMsg))
 	require.Equal(t, 1, len(c.resetCh))
 	<-c.resetCh
@@ -116,7 +116,7 @@ func TestResetConnectionAfterDelay(t *testing.T) {
 		NewAddressEncodeDecoderOptions().
 			SetReconnectDelay(0),
 	).(*addrEncdec)
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	require.Error(t, c.Encode(&testMsg))
 	var called int
 	conn := new(net.TCPConn)
@@ -145,11 +145,11 @@ func TestEncodeErrorReset(t *testing.T) {
 				NewConnectionEncodeDecoderOptions().SetEncoderOptions(NewEncodeDecoderOptions().SetBufferSize(1)),
 			),
 	).(*addrEncdec)
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 
 	c.encdec.(*connEncdec).resetWriter(errWriter{})
 	require.Error(t, c.Encode(&testMsg))
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 
 	clientConn, serverConn := net.Pipe()
 	var wg sync.WaitGroup
@@ -194,11 +194,11 @@ func TestDecodeErrorReset(t *testing.T) {
 				NewConnectionEncodeDecoderOptions().SetEncoderOptions(NewEncodeDecoderOptions().SetBufferSize(1)),
 			),
 	).(*addrEncdec)
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 
 	c.encdec.(*connEncdec).resetReader(errReader{})
 	require.Error(t, c.Decode(&testMsg))
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 
 	clientConn, serverConn := net.Pipe()
 	var wg sync.WaitGroup
@@ -238,7 +238,7 @@ func TestAutoReset(t *testing.T) {
 				NewConnectionEncodeDecoderOptions().SetEncoderOptions(NewEncodeDecoderOptions().SetBufferSize(1)),
 			),
 	).(*addrEncdec)
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	require.Equal(t, 1, len(c.resetCh))
 
 	clientConn, serverConn := net.Pipe()
@@ -264,10 +264,16 @@ func TestAutoReset(t *testing.T) {
 	}
 	c.Init()
 
-	for !c.hasValidConnection() {
+	for {
+		c.RLock()
+		canEncodeDecodeWithLock := c.canEncodeDecodeWithLock()
+		c.RUnlock()
+		if canEncodeDecodeWithLock {
+			break
+		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 	require.Equal(t, 0, len(c.resetCh))
 	require.Equal(t, 1, called)
 	require.Equal(t, c.encdec.(*connEncdec).conn, clientConn)
@@ -285,11 +291,11 @@ func TestAddressEncodeDecoderClose(t *testing.T) {
 	defer lis.Close()
 
 	c := NewAddressEncodeDecoder(lis.Addr().String(), nil).(*addrEncdec)
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 	c.Close()
 	// Safe to close again
 	c.Close()
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	_, ok := <-c.doneCh
 	require.False(t, ok)
 }
@@ -300,12 +306,12 @@ func TestAddressEncodeDecoderReset(t *testing.T) {
 	defer lis.Close()
 
 	c := NewAddressEncodeDecoder(lis.Addr().String(), nil).(*addrEncdec)
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 
 	addr1 := "badAddr"
 	c.ResetAddr(addr1)
 	require.Equal(t, addr1, c.addr)
-	require.False(t, c.hasValidConnection())
+	require.False(t, c.canEncodeDecodeWithLock())
 	select {
 	case <-c.doneCh:
 		require.FailNow(t, "not expected")
@@ -319,7 +325,7 @@ func TestAddressEncodeDecoderReset(t *testing.T) {
 	c.ResetAddr(lis.Addr().String())
 	require.False(t, c.isClosed())
 	require.Equal(t, lis.Addr().String(), c.addr)
-	require.True(t, c.hasValidConnection())
+	require.True(t, c.canEncodeDecodeWithLock())
 	select {
 	case <-c.doneCh:
 		require.FailNow(t, "not expected")

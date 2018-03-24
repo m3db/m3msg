@@ -22,7 +22,6 @@ package proto
 
 import (
 	"bufio"
-	"encoding/binary"
 	"io"
 
 	"github.com/m3db/m3x/pool"
@@ -64,7 +63,7 @@ func (d *decoder) decodeSize() (int, error) {
 	if _, err := io.ReadFull(d.r, d.sizeBuffer); err != nil {
 		return 0, err
 	}
-	size := binary.BigEndian.Uint32(d.sizeBuffer)
+	size := sizeEncodeDecoder.Uint32(d.sizeBuffer)
 	return int(size), nil
 }
 

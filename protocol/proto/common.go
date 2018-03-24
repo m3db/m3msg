@@ -21,60 +21,28 @@
 package proto
 
 import (
-	"bufio"
-	"io"
+	"encoding/binary"
 
 	"github.com/m3db/m3x/pool"
 )
 
-type encoder struct {
-	w          *bufio.Writer
-	sizeBuffer []byte
-	dataBuffer []byte
-	bytesPool  pool.BytesPool
-}
+var sizeEncodeDecoder = binary.BigEndian
 
-// NewEncoder creates a new encoder.
-func NewEncoder(w io.Writer, opts EncodeDecoderOptions) Encoder {
-	return newEncoder(w, opts)
-}
-
-func newEncoder(w io.Writer, opts EncodeDecoderOptions) *encoder {
-	if opts == nil {
-		opts = NewEncodeDecoderOptions()
+func growDataBufferIfNeeded(buffer []byte, target int, pool pool.BytesPool) []byte {
+	if len(buffer) >= target {
+		return buffer
 	}
-	pool := opts.BytesPool()
-	return &encoder{
-		w:          bufio.NewWriterSize(w, opts.BufferSize()),
-		sizeBuffer: getByteSliceWithLength(sizeBufferSize, pool),
-		bytesPool:  pool,
+	if pool != nil {
+		pool.Put(buffer)
 	}
+	return getByteSliceWithLength(target, pool)
 }
 
-func (e *encoder) Encode(m Marshaler) error {
-	size := m.Size()
-	if err := e.encodeSize(size); err != nil {
-		return err
+func getByteSliceWithLength(target int, pool pool.BytesPool) []byte {
+	if pool == nil {
+		return make([]byte, target)
 	}
-	return e.encodeData(m, size)
-}
-
-func (e *encoder) encodeSize(size int) error {
-	sizeEncodeDecoder.PutUint32(e.sizeBuffer, uint32(size))
-	_, err := e.w.Write(e.sizeBuffer)
-	return err
-}
-
-func (e *encoder) encodeData(m Marshaler, size int) error {
-	e.dataBuffer = growDataBufferIfNeeded(e.dataBuffer, size, e.bytesPool)
-	size, err := m.MarshalTo(e.dataBuffer)
-	if err != nil {
-		return err
-	}
-	_, err = e.w.Write(e.dataBuffer[:size])
-	return err
-}
-
-func (e *encoder) resetWriter(w io.Writer) {
-	e.w.Reset(w)
+	b := pool.Get(target)
+	// Make sure there is enough length in the slice.
+	return b[:cap(b)]
 }

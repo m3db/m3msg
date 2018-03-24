@@ -2,8 +2,8 @@ syntax = "proto3";
 package msgpb;
 
 message Header {
-    uint64 high = 1;
-    uint64 low = 2;
+    uint64 shard = 1;
+    uint64 id = 2;
 }
 
 message Message {
