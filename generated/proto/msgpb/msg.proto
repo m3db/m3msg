@@ -12,5 +12,5 @@ message Message {
 }
 
 message Ack {
-  repeated Metadata headers = 1;
+  repeated Metadata metadata = 1;
 }

@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	sizeBufferSize        = 4
 	defaultDataBufferSize = 16384
 	defaultDialTimeout    = 10 * time.Second
 	defaultReconnectDelay = 5 * time.Second
@@ -138,6 +137,7 @@ func (opts *connOptions) SetConnectionEncodeDecoderPool(pool ConnectionEncodeDec
 // NewAddressEncodeDecoderOptions creates a new AddressEncodeDecoderOptions.
 func NewAddressEncodeDecoderOptions() AddressEncodeDecoderOptions {
 	return &addrOptions{
+		cOpts:          NewConnectionEncodeDecoderOptions(),
 		dialTimeout:    defaultDialTimeout,
 		reconnectDelay: defaultReconnectDelay,
 		rOpts:          retry.NewOptions(),

@@ -26,6 +26,10 @@ import (
 	"github.com/m3db/m3x/pool"
 )
 
+const (
+	sizeBufferSize = 4
+)
+
 var sizeEncodeDecoder = binary.BigEndian
 
 func growDataBufferIfNeeded(buffer []byte, target int, pool pool.BytesPool) []byte {
