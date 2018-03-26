@@ -51,11 +51,13 @@ func NewConnectionEncodeDecoder(
 		opts = NewConnectionEncodeDecoderOptions()
 	}
 	c := connEncdec{
-		encLock: defaultLock,
-		enc:     newEncoder(conn, opts.EncoderOptions()),
-		decLock: defaultLock,
-		dec:     newDecoder(conn, opts.DecoderOptions()),
-		pool:    opts.ConnectionEncodeDecoderPool(),
+		conn:     conn,
+		encLock:  defaultLock,
+		enc:      newEncoder(conn, opts.EncoderOptions()),
+		decLock:  defaultLock,
+		dec:      newDecoder(conn, opts.DecoderOptions()),
+		isClosed: false,
+		pool:     opts.ConnectionEncodeDecoderPool(),
 	}
 	if opts.EncodeWithLock() {
 		c.encLock = new(sync.Mutex)

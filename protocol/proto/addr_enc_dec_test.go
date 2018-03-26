@@ -155,6 +155,8 @@ func TestEncodeErrorReset(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		server := NewConnectionEncodeDecoder(
 			serverConn,
 			NewConnectionEncodeDecoderOptions().
@@ -164,7 +166,6 @@ func TestEncodeErrorReset(t *testing.T) {
 		require.NoError(t, server.Decode(&msg))
 		require.Equal(t, testMsg, msg)
 		require.NoError(t, server.Encode(&testMsg))
-		wg.Done()
 	}()
 
 	c.connectFn = func(addr string) (net.Conn, error) {
@@ -204,6 +205,8 @@ func TestDecodeErrorReset(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		server := NewConnectionEncodeDecoder(
 			serverConn,
 			NewConnectionEncodeDecoderOptions().
@@ -213,7 +216,6 @@ func TestDecodeErrorReset(t *testing.T) {
 		require.NoError(t, server.Decode(&msg))
 		require.Equal(t, testMsg, msg)
 		require.NoError(t, server.Encode(&testMsg))
-		wg.Done()
 	}()
 
 	c.connectFn = func(addr string) (net.Conn, error) {
@@ -245,6 +247,8 @@ func TestAutoReset(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		server := NewConnectionEncodeDecoder(
 			serverConn,
 			NewConnectionEncodeDecoderOptions().
@@ -254,7 +258,6 @@ func TestAutoReset(t *testing.T) {
 		require.NoError(t, server.Decode(&msg))
 		require.Equal(t, testMsg, msg)
 		require.NoError(t, server.Encode(&testMsg))
-		wg.Done()
 	}()
 
 	var called int
