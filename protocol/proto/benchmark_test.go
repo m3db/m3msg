@@ -27,47 +27,12 @@ import (
 	"github.com/m3db/m3msg/generated/proto/msgpb"
 )
 
-func BenchmarkAddressEncodeDecoerRoundTrip(b *testing.B) {
-	a := NewAddressEncodeDecoder(
-		"",
-		NewAddressEncodeDecoderOptions().
-			SetReconnectDelay(0).
-			SetConnectionEncodeDecoderOptions(
-				NewConnectionEncodeDecoderOptions().
-					SetEncoderOptions(NewEncodeDecoderOptions().SetBufferSize(1)),
-			),
-	).(*addrEncdec)
-	mimicTCP := bytes.NewBuffer(nil)
-	a.encdec.(*connEncdec).resetWriter(mimicTCP)
-	a.encdec.(*connEncdec).resetReader(mimicTCP)
-	a.validConn = true
-	encodeMsg := msgpb.Message{
-		Metadata: &msgpb.Metadata{},
-		Value:    make([]byte, 200),
-	}
-	decodeMsg := msgpb.Message{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		encodeMsg.Metadata.Id = uint64(n)
-		if err := a.Encode(&encodeMsg); err != nil {
-			b.FailNow()
-		}
-		if err := a.Decode(&decodeMsg); err != nil {
-			b.FailNow()
-		}
-		if decodeMsg.Metadata.Id != uint64(n) {
-			b.FailNow()
-		}
-	}
-}
-
-func BenchmarkConnectionEncodeDecoerRoundTrip(b *testing.B) {
-	c := NewConnectionEncodeDecoder(
+func BenchmarkEncodeDecoderRoundTrip(b *testing.B) {
+	c := NewEncodeDecoder(
 		nil,
-		NewConnectionEncodeDecoderOptions().
-			SetEncoderOptions(NewEncodeDecoderOptions().SetBufferSize(1)),
-	).(*connEncdec)
+		NewEncodeDecoderOptions().
+			SetEncoderOptions(NewBaseOptions().SetBufferSize(1)),
+	).(*encdec)
 	mimicTCP := bytes.NewBuffer(nil)
 	c.resetWriter(mimicTCP)
 	c.resetReader(mimicTCP)
@@ -92,10 +57,10 @@ func BenchmarkConnectionEncodeDecoerRoundTrip(b *testing.B) {
 	}
 }
 
-func BenchmarkEncodeDecoerRoundTrip(b *testing.B) {
+func BenchmarkBaseEncodeDecodeRoundTrip(b *testing.B) {
 	mimicTCP := bytes.NewBuffer(nil)
-	encoder := NewEncoder(mimicTCP, NewEncodeDecoderOptions().SetBufferSize(1))
-	decoder := NewDecoder(mimicTCP, NewEncodeDecoderOptions().SetBufferSize(1))
+	encoder := NewEncoder(mimicTCP, NewBaseOptions().SetBufferSize(1))
+	decoder := NewDecoder(mimicTCP, NewBaseOptions().SetBufferSize(1))
 	encodeMsg := msgpb.Message{
 		Metadata: &msgpb.Metadata{},
 		Value:    make([]byte, 200),

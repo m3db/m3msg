@@ -30,41 +30,49 @@ import (
 )
 
 func TestNewEncodeDecoderWithLock(t *testing.T) {
-	c := NewConnectionEncodeDecoder(nil, nil).(*connEncdec)
+	c := NewEncodeDecoder(nil, nil).(*encdec)
 	require.Equal(t, defaultLock, c.encLock)
 	require.Equal(t, defaultLock, c.decLock)
-	c = NewConnectionEncodeDecoder(
+	c = NewEncodeDecoder(
 		nil,
-		NewConnectionEncodeDecoderOptions().
+		NewEncodeDecoderOptions().
 			SetEncodeWithLock(true).
 			SetDecodeWithLock(true),
-	).(*connEncdec)
+	).(*encdec)
 	require.NotEqual(t, defaultLock, c.encLock)
 	require.NotEqual(t, defaultLock, c.decLock)
 }
 
-func TestConnectionEncodeDecoderReset(t *testing.T) {
-	c := NewConnectionEncodeDecoder(new(net.TCPConn), nil).(*connEncdec)
+func TestEncodeDecoderReset(t *testing.T) {
+	c := NewEncodeDecoder(new(net.TCPConn), nil).(*encdec)
 	c.Close()
 	// Safe to close again.
 	c.Close()
 	require.True(t, c.isClosed)
 
-	c.ResetConn(new(net.TCPConn))
+	c.Reset(new(net.TCPConn))
 	require.False(t, c.isClosed)
 }
 
-func TestConnectionEncodeDecodeRoundTrip(t *testing.T) {
-	c := NewConnectionEncodeDecoder(
+func TestEncodeDecodeRoundTrip(t *testing.T) {
+	c := NewEncodeDecoder(
 		nil,
-		NewConnectionEncodeDecoderOptions().
-			SetEncoderOptions(NewEncodeDecoderOptions().SetBufferSize(1)),
-	).(*connEncdec)
+		NewEncodeDecoderOptions().
+			SetEncoderOptions(NewBaseOptions().SetBufferSize(1)).
+			SetDecoderOptions(NewBaseOptions().SetBufferSize(1)),
+	).(*encdec)
 
 	clientConn, serverConn := net.Pipe()
 	c.resetWriter(clientConn)
 	c.resetReader(serverConn)
 
+	testMsg := msgpb.Message{
+		Metadata: &msgpb.Metadata{
+			Shard: 1,
+			Id:    2,
+		},
+		Value: make([]byte, 10),
+	}
 	go func() {
 		require.NoError(t, c.Encode(&testMsg))
 	}()

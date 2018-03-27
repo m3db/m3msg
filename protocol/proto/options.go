@@ -21,184 +21,109 @@
 package proto
 
 import (
-	"time"
-
-	"github.com/m3db/m3x/instrument"
 	"github.com/m3db/m3x/pool"
-	"github.com/m3db/m3x/retry"
 )
 
 const (
 	defaultDataBufferSize = 16384
-	defaultDialTimeout    = 10 * time.Second
-	defaultReconnectDelay = 5 * time.Second
 )
 
-// NewEncodeDecoderOptions creates a new EncodeDecoderOptions.
-func NewEncodeDecoderOptions() EncodeDecoderOptions {
-	return &encdecOptions{
+// NewBaseOptions creates a new BaseOptions.
+func NewBaseOptions() BaseOptions {
+	return &baseOptions{
 		bufferSize: defaultDataBufferSize,
 	}
 }
 
-type encdecOptions struct {
+type baseOptions struct {
 	bytesPool  pool.BytesPool
 	bufferSize int
 }
 
-func (opts *encdecOptions) BytesPool() pool.BytesPool {
+func (opts *baseOptions) BytesPool() pool.BytesPool {
 	return opts.bytesPool
 }
 
-func (opts *encdecOptions) SetBytesPool(value pool.BytesPool) EncodeDecoderOptions {
+func (opts *baseOptions) SetBytesPool(value pool.BytesPool) BaseOptions {
 	o := *opts
 	o.bytesPool = value
 	return &o
 }
 
-func (opts *encdecOptions) BufferSize() int {
+func (opts *baseOptions) BufferSize() int {
 	return opts.bufferSize
 }
 
-func (opts *encdecOptions) SetBufferSize(value int) EncodeDecoderOptions {
+func (opts *baseOptions) SetBufferSize(value int) BaseOptions {
 	o := *opts
 	o.bufferSize = value
 	return &o
 }
 
-// NewConnectionEncodeDecoderOptions creates a ConnectionEncodeDecoderOptions.
-func NewConnectionEncodeDecoderOptions() ConnectionEncodeDecoderOptions {
-	return &connOptions{
+// NewEncodeDecoderOptions creates an EncodeDecoderOptions.
+func NewEncodeDecoderOptions() EncodeDecoderOptions {
+	return &encdecOptions{
 		enableWriteLock: false,
 		enableReadLock:  false,
-		encOpts:         NewEncodeDecoderOptions(),
-		decOpts:         NewEncodeDecoderOptions(),
+		encOpts:         NewBaseOptions(),
+		decOpts:         NewBaseOptions(),
 	}
 }
 
-type connOptions struct {
+type encdecOptions struct {
 	enableWriteLock bool
 	enableReadLock  bool
-	encOpts         EncodeDecoderOptions
-	decOpts         EncodeDecoderOptions
-	pool            ConnectionEncodeDecoderPool
+	encOpts         BaseOptions
+	decOpts         BaseOptions
+	pool            EncodeDecoderPool
 }
 
-func (opts *connOptions) EncodeWithLock() bool {
+func (opts *encdecOptions) EncodeWithLock() bool {
 	return opts.enableWriteLock
 }
 
-func (opts *connOptions) SetEncodeWithLock(value bool) ConnectionEncodeDecoderOptions {
+func (opts *encdecOptions) SetEncodeWithLock(value bool) EncodeDecoderOptions {
 	o := *opts
 	o.enableWriteLock = value
 	return &o
 }
 
-func (opts *connOptions) DecodeWithLock() bool {
+func (opts *encdecOptions) DecodeWithLock() bool {
 	return opts.enableReadLock
 }
 
-func (opts *connOptions) SetDecodeWithLock(value bool) ConnectionEncodeDecoderOptions {
+func (opts *encdecOptions) SetDecodeWithLock(value bool) EncodeDecoderOptions {
 	o := *opts
 	o.enableReadLock = value
 	return &o
 }
 
-func (opts *connOptions) EncoderOptions() EncodeDecoderOptions {
+func (opts *encdecOptions) EncoderOptions() BaseOptions {
 	return opts.encOpts
 }
 
-func (opts *connOptions) SetEncoderOptions(value EncodeDecoderOptions) ConnectionEncodeDecoderOptions {
+func (opts *encdecOptions) SetEncoderOptions(value BaseOptions) EncodeDecoderOptions {
 	o := *opts
 	o.encOpts = value
 	return &o
 }
 
-func (opts *connOptions) DecoderOptions() EncodeDecoderOptions {
+func (opts *encdecOptions) DecoderOptions() BaseOptions {
 	return opts.decOpts
 }
 
-func (opts *connOptions) SetDecoderOptions(value EncodeDecoderOptions) ConnectionEncodeDecoderOptions {
+func (opts *encdecOptions) SetDecoderOptions(value BaseOptions) EncodeDecoderOptions {
 	o := *opts
 	o.decOpts = value
 	return &o
 }
 
-func (opts *connOptions) ConnectionEncodeDecoderPool() ConnectionEncodeDecoderPool {
+func (opts *encdecOptions) EncodeDecoderPool() EncodeDecoderPool {
 	return opts.pool
 }
 
-func (opts *connOptions) SetConnectionEncodeDecoderPool(pool ConnectionEncodeDecoderPool) ConnectionEncodeDecoderOptions {
+func (opts *encdecOptions) SetEncodeDecoderPool(pool EncodeDecoderPool) EncodeDecoderOptions {
 	o := *opts
 	o.pool = pool
-	return &o
-}
-
-// NewAddressEncodeDecoderOptions creates a new AddressEncodeDecoderOptions.
-func NewAddressEncodeDecoderOptions() AddressEncodeDecoderOptions {
-	return &addrOptions{
-		cOpts:          NewConnectionEncodeDecoderOptions(),
-		dialTimeout:    defaultDialTimeout,
-		reconnectDelay: defaultReconnectDelay,
-		rOpts:          retry.NewOptions(),
-		iOpts:          instrument.NewOptions(),
-	}
-}
-
-type addrOptions struct {
-	cOpts          ConnectionEncodeDecoderOptions
-	rOpts          retry.Options
-	dialTimeout    time.Duration
-	reconnectDelay time.Duration
-	iOpts          instrument.Options
-}
-
-func (opts *addrOptions) ConnectionEncodeDecoderOptions() ConnectionEncodeDecoderOptions {
-	return opts.cOpts
-}
-
-func (opts *addrOptions) SetConnectionEncodeDecoderOptions(value ConnectionEncodeDecoderOptions) AddressEncodeDecoderOptions {
-	o := *opts
-	o.cOpts = value
-	return &o
-}
-
-func (opts *addrOptions) ConnectionRetryOptions() retry.Options {
-	return opts.rOpts
-}
-
-func (opts *addrOptions) SetConnectionRetryOptions(value retry.Options) AddressEncodeDecoderOptions {
-	o := *opts
-	o.rOpts = value
-	return &o
-}
-
-func (opts *addrOptions) DialTimeout() time.Duration {
-	return opts.dialTimeout
-}
-
-func (opts *addrOptions) SetDialTimeout(value time.Duration) AddressEncodeDecoderOptions {
-	o := *opts
-	o.dialTimeout = value
-	return &o
-}
-
-func (opts *addrOptions) ReconnectDelay() time.Duration {
-	return opts.reconnectDelay
-}
-
-func (opts *addrOptions) SetReconnectDelay(value time.Duration) AddressEncodeDecoderOptions {
-	o := *opts
-	o.reconnectDelay = value
-	return &o
-}
-
-func (opts *addrOptions) InstrumentOptions() instrument.Options {
-	return opts.iOpts
-}
-
-func (opts *addrOptions) SetInstrumentOptions(value instrument.Options) AddressEncodeDecoderOptions {
-	o := *opts
-	o.iOpts = value
 	return &o
 }

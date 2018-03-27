@@ -20,29 +20,30 @@
 
 package proto
 
-import "github.com/m3db/m3x/pool"
+import (
+	"testing"
 
-type connEncdecPool struct {
-	pool pool.ObjectPool
-}
+	"github.com/m3db/m3x/pool"
 
-// NewConnectionEncodeDecoderPool creates a pool for ConnectionEncodeDecoderPool.
-func NewConnectionEncodeDecoderPool(opts pool.ObjectPoolOptions) ConnectionEncodeDecoderPool {
-	return &connEncdecPool{
-		pool: pool.NewObjectPool(opts),
-	}
-}
+	"github.com/stretchr/testify/require"
+)
 
-func (p *connEncdecPool) Init(alloc ConnectionEncodeDecoderAlloc) {
-	p.pool.Init(func() interface{} {
-		return alloc()
+func TestEncodeDecoderPool(t *testing.T) {
+	p := NewEncodeDecoderPool(pool.NewObjectPoolOptions().SetSize(1))
+	opts := NewEncodeDecoderOptions().SetEncodeDecoderPool(p)
+	p.Init(func() EncodeDecoder {
+		return NewEncodeDecoder(nil, opts)
 	})
-}
 
-func (p *connEncdecPool) Get() ConnectionEncodeDecoder {
-	return p.pool.Get().(ConnectionEncodeDecoder)
-}
+	c := p.Get()
+	c.Reset(nil)
 
-func (p *connEncdecPool) Put(c ConnectionEncodeDecoder) {
-	p.pool.Put(c)
+	c.Close()
+	require.True(t, c.(*encdec).isClosed)
+
+	c = p.Get()
+	require.True(t, c.(*encdec).isClosed)
+
+	c.Reset(nil)
+	require.False(t, c.(*encdec).isClosed)
 }

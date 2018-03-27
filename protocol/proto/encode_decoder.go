@@ -30,7 +30,7 @@ var (
 	defaultLock noopLock
 )
 
-type connEncdec struct {
+type encdec struct {
 	sync.Mutex
 
 	conn     net.Conn
@@ -39,25 +39,25 @@ type connEncdec struct {
 	decLock  sync.Locker
 	dec      *decoder
 	isClosed bool
-	pool     ConnectionEncodeDecoderPool
+	pool     EncodeDecoderPool
 }
 
-// NewConnectionEncodeDecoder creates an EncodeDecoder on a connection.
-func NewConnectionEncodeDecoder(
+// NewEncodeDecoder creates an EncodeDecoder.
+func NewEncodeDecoder(
 	conn net.Conn,
-	opts ConnectionEncodeDecoderOptions,
-) ConnectionEncodeDecoder {
+	opts EncodeDecoderOptions,
+) EncodeDecoder {
 	if opts == nil {
-		opts = NewConnectionEncodeDecoderOptions()
+		opts = NewEncodeDecoderOptions()
 	}
-	c := connEncdec{
+	c := encdec{
 		conn:     conn,
 		encLock:  defaultLock,
 		enc:      newEncoder(conn, opts.EncoderOptions()),
 		decLock:  defaultLock,
 		dec:      newDecoder(conn, opts.DecoderOptions()),
 		isClosed: false,
-		pool:     opts.ConnectionEncodeDecoderPool(),
+		pool:     opts.EncodeDecoderPool(),
 	}
 	if opts.EncodeWithLock() {
 		c.encLock = new(sync.Mutex)
@@ -68,21 +68,21 @@ func NewConnectionEncodeDecoder(
 	return &c
 }
 
-func (c *connEncdec) Encode(msg Marshaler) error {
+func (c *encdec) Encode(msg Marshaler) error {
 	c.encLock.Lock()
 	err := c.enc.Encode(msg)
 	c.encLock.Unlock()
 	return err
 }
 
-func (c *connEncdec) Decode(acks Unmarshaler) error {
+func (c *encdec) Decode(acks Unmarshaler) error {
 	c.decLock.Lock()
 	err := c.dec.Decode(acks)
 	c.decLock.Unlock()
 	return err
 }
 
-func (c *connEncdec) Close() {
+func (c *encdec) Close() {
 	c.Lock()
 	if c.isClosed {
 		c.Unlock()
@@ -99,7 +99,7 @@ func (c *connEncdec) Close() {
 	c.Unlock()
 }
 
-func (c *connEncdec) ResetConn(conn net.Conn) {
+func (c *encdec) Reset(conn net.Conn) {
 	c.Lock()
 	if c.conn != nil {
 		c.conn.Close()
@@ -111,13 +111,13 @@ func (c *connEncdec) ResetConn(conn net.Conn) {
 	c.Unlock()
 }
 
-func (c *connEncdec) resetWriter(w io.Writer) {
+func (c *encdec) resetWriter(w io.Writer) {
 	c.encLock.Lock()
 	c.enc.resetWriter(w)
 	c.encLock.Unlock()
 }
 
-func (c *connEncdec) resetReader(r io.Reader) {
+func (c *encdec) resetReader(r io.Reader) {
 	c.decLock.Lock()
 	c.dec.resetReader(r)
 	c.decLock.Unlock()

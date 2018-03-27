@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEncodeDecodeRoundTripWithoutPool(t *testing.T) {
+func TestBaseEncodeDecodeRoundTripWithoutPool(t *testing.T) {
 	mimicTCP := bytes.NewBuffer(nil)
 	enc := newEncoder(mimicTCP, nil)
 	require.Equal(t, 4, len(enc.sizeBuffer))
@@ -56,14 +56,14 @@ func TestEncodeDecodeRoundTripWithoutPool(t *testing.T) {
 	require.Equal(t, encodeMsg.Size(), cap(dec.dataBuffer))
 }
 
-func TestEncodeDecodeRoundTripWithPool(t *testing.T) {
+func TestBaseEncodeDecodeRoundTripWithPool(t *testing.T) {
 	p := getBytesPool(2, []int{2, 8, 100})
 	p.Init()
 	mimicTCP := bytes.NewBuffer(nil)
-	enc := newEncoder(mimicTCP, NewEncodeDecoderOptions().SetBytesPool(p))
+	enc := newEncoder(mimicTCP, NewBaseOptions().SetBytesPool(p))
 	require.Equal(t, 8, len(enc.sizeBuffer))
 	require.Equal(t, 8, cap(enc.sizeBuffer))
-	dec := newDecoder(mimicTCP, NewEncodeDecoderOptions().SetBytesPool(p))
+	dec := newDecoder(mimicTCP, NewBaseOptions().SetBytesPool(p))
 	require.Equal(t, 8, len(dec.sizeBuffer))
 	require.Equal(t, 8, cap(dec.sizeBuffer))
 	encodeMsg := msgpb.Message{

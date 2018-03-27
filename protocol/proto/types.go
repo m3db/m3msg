@@ -22,11 +22,8 @@ package proto
 
 import (
 	"net"
-	"time"
 
-	"github.com/m3db/m3x/instrument"
 	"github.com/m3db/m3x/pool"
-	"github.com/m3db/m3x/retry"
 )
 
 // Marshaler can be marshaled.
@@ -54,117 +51,73 @@ type Decoder interface {
 type EncodeDecoder interface {
 	Encoder
 	Decoder
+
+	// Close closes the EncodeDecoder.
 	Close()
+
+	// Reset resets the EncodeDecoder.
+	Reset(conn net.Conn)
 }
 
-// ConnectionEncodeDecoder is an EncodeDecoder based on a connection.
-type ConnectionEncodeDecoder interface {
-	EncodeDecoder
+// EncodeDecoderPool is a pool of EncodeDecoders.
+type EncodeDecoderPool interface {
+	// Init initializes the EncodeDecoder pool.
+	Init(alloc EncodeDecoderAlloc)
 
-	// ResetConn resets the connection.
-	ResetConn(conn net.Conn)
+	// Get returns an EncodeDecoder from the pool.
+	Get() EncodeDecoder
+
+	// Put puts an EncodeDecoder into the pool.
+	Put(c EncodeDecoder)
 }
 
-// AddressEncodeDecoder is an EncodeDecoder based on a server address.
-type AddressEncodeDecoder interface {
-	EncodeDecoder
+// EncodeDecoderAlloc allocates an EncodeDecoder.
+type EncodeDecoderAlloc func() EncodeDecoder
 
-	// Init initializes the AddressEncodeDecoder.
-	Init()
-}
-
-// ConnectionEncodeDecoderPool is a pool of ConnectionEncodeDecoders.
-type ConnectionEncodeDecoderPool interface {
-	// Init initializes the ConnectionEncodeDecoderPool pool.
-	Init(alloc ConnectionEncodeDecoderAlloc)
-
-	// Get returns an ConnectionEncodeDecoder from the pool.
-	Get() ConnectionEncodeDecoder
-
-	// Put puts an ConnectionEncodeDecoder into the pool.
-	Put(c ConnectionEncodeDecoder)
-}
-
-// ConnectionEncodeDecoderAlloc allocates a ConnectionEncodeDecoder.
-type ConnectionEncodeDecoderAlloc func() ConnectionEncodeDecoder
-
-// EncodeDecoderOptions configures an EncodeDecoder.
-type EncodeDecoderOptions interface {
+// BaseOptions configures a base encoder or decoder.
+type BaseOptions interface {
 	// BytesPool returns the bytes pool.
 	BytesPool() pool.BytesPool
 
 	// SetBytesPool sets the bytes pool.
-	SetBytesPool(value pool.BytesPool) EncodeDecoderOptions
+	SetBytesPool(value pool.BytesPool) BaseOptions
 
 	// BufferSize returns the size of buffer before a write or a read.
 	BufferSize() int
 
 	// SetBufferSize sets the buffer size.
-	SetBufferSize(value int) EncodeDecoderOptions
+	SetBufferSize(value int) BaseOptions
 }
 
-// ConnectionEncodeDecoderOptions configures a ConnectionEncodeDecoder.
-type ConnectionEncodeDecoderOptions interface {
+// EncodeDecoderOptions configures an EncodeDecoder.
+type EncodeDecoderOptions interface {
 	// EncodeWithLock returns whether the encode function should be guarded with a lock.
 	EncodeWithLock() bool
 
 	// SetEncodeWithLock sets EncodeWithLock.
-	SetEncodeWithLock(value bool) ConnectionEncodeDecoderOptions
+	SetEncodeWithLock(value bool) EncodeDecoderOptions
 
 	// DecodeWithLock returns whether the decode function should be guarded with a lock.
 	DecodeWithLock() bool
 
 	// SetDecodeWithLock sets DecodeWithLock.
-	SetDecodeWithLock(value bool) ConnectionEncodeDecoderOptions
+	SetDecodeWithLock(value bool) EncodeDecoderOptions
 
 	// EncoderOptions returns the options for encoder.
-	EncoderOptions() EncodeDecoderOptions
+	EncoderOptions() BaseOptions
 
 	// SetEncoderOptions sets the options for encoder.
-	SetEncoderOptions(value EncodeDecoderOptions) ConnectionEncodeDecoderOptions
+	SetEncoderOptions(value BaseOptions) EncodeDecoderOptions
 
 	// DecoderOptions returns the options for decoder.
-	DecoderOptions() EncodeDecoderOptions
+	DecoderOptions() BaseOptions
 
 	// SetDecoderOptions sets the options for decoder.
-	SetDecoderOptions(value EncodeDecoderOptions) ConnectionEncodeDecoderOptions
+	SetDecoderOptions(value BaseOptions) EncodeDecoderOptions
 
-	// ConnectionEncodeDecoderPool returns the pool for ConnectionEncodeDecoder.
-	ConnectionEncodeDecoderPool() ConnectionEncodeDecoderPool
+	// EncodeDecoderPool returns the pool for EncodeDecoder.
+	EncodeDecoderPool() EncodeDecoderPool
 
-	// SetConnectionEncodeDecoderPool sets the pool for ConnectionEncodeDecoder.
-	SetConnectionEncodeDecoderPool(pool ConnectionEncodeDecoderPool) ConnectionEncodeDecoderOptions
-}
-
-// AddressEncodeDecoderOptions configures an AddressEncodeDecoder.
-type AddressEncodeDecoderOptions interface {
-	// ConnectionEncodeDecoderOptions returns the options for ConnectionEncodeDecoder.
-	ConnectionEncodeDecoderOptions() ConnectionEncodeDecoderOptions
-
-	// SetConnectionEncodeDecoderOptions sets the options for ConnectionEncodeDecoder.
-	SetConnectionEncodeDecoderOptions(value ConnectionEncodeDecoderOptions) AddressEncodeDecoderOptions
-
-	// ConnectionRetryOptions returns the options for connection retrier.
-	ConnectionRetryOptions() retry.Options
-
-	// SetConnectionRetryOptions sets the options for connection retrier.
-	SetConnectionRetryOptions(value retry.Options) AddressEncodeDecoderOptions
-
-	// DialTimeout returns the dial timeout.
-	DialTimeout() time.Duration
-
-	// SetDialTimeout sets the dial timeout.
-	SetDialTimeout(value time.Duration) AddressEncodeDecoderOptions
-
-	// ReconnectDelay returns the delay between reconnections.
-	ReconnectDelay() time.Duration
-
-	// SetReconnectDelay sets the delay between reconnections.
-	SetReconnectDelay(value time.Duration) AddressEncodeDecoderOptions
-
-	// InstrumentOptions returns the instrument options.
-	InstrumentOptions() instrument.Options
-
-	// SetInstrumentOptions sets the instrument options.
-	SetInstrumentOptions(value instrument.Options) AddressEncodeDecoderOptions
+	// SetEncodeDecoderPool sets the pool for EncodeDecoder.
+	SetEncodeDecoderPool(pool EncodeDecoderPool) EncodeDecoderOptions
 }
