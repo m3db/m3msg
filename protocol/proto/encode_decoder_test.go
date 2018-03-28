@@ -30,14 +30,17 @@ import (
 )
 
 func TestEncodeDecoderReset(t *testing.T) {
-	c := NewEncodeDecoder(new(net.TCPConn), nil).(*encdec)
+	c := NewEncodeDecoder(nil, nil).(*encdec)
+	require.NotPanics(t, func() { c.Encode(&msgpb.Message{}) })
 	c.Close()
 	// Safe to close again.
 	c.Close()
 	require.True(t, c.isClosed)
+	require.NotPanics(t, func() { c.Encode(&msgpb.Message{}) })
 
-	c.Reset(new(net.TCPConn))
+	c.Reset(nil)
 	require.False(t, c.isClosed)
+	require.NotPanics(t, func() { c.Encode(&msgpb.Message{}) })
 }
 
 func TestEncodeDecodeRoundTrip(t *testing.T) {

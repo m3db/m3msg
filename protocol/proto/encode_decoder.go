@@ -24,6 +24,10 @@ import (
 	"net"
 )
 
+var (
+	defaultConn = new(net.TCPConn)
+)
+
 type encdec struct {
 	conn     net.Conn
 	enc      *encoder
@@ -39,6 +43,9 @@ func NewEncodeDecoder(
 ) EncodeDecoder {
 	if opts == nil {
 		opts = NewEncodeDecoderOptions()
+	}
+	if conn == nil {
+		conn = defaultConn
 	}
 	c := encdec{
 		conn:     conn,
@@ -65,19 +72,18 @@ func (c *encdec) Close() {
 		return
 	}
 	c.isClosed = true
-	if c.conn != nil {
-		c.conn.Close()
-	}
-	c.conn = nil
+	c.conn.Close()
+	c.conn = defaultConn
 	if c.pool != nil {
 		c.pool.Put(c)
 	}
 }
 
 func (c *encdec) Reset(conn net.Conn) {
-	if c.conn != nil {
-		c.conn.Close()
+	if conn == nil {
+		conn = defaultConn
 	}
+	c.conn.Close()
 	c.enc.resetWriter(conn)
 	c.dec.resetReader(conn)
 	c.conn = conn
