@@ -25,6 +25,8 @@ import (
 )
 
 const (
+	// Using 16K which provides much better performance comparing
+	// to lower values like 1k ~ 8k.
 	defaultDataBufferSize = 16384
 )
 
