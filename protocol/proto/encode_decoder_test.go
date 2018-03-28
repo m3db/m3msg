@@ -29,20 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewEncodeDecoderWithLock(t *testing.T) {
-	c := NewEncodeDecoder(nil, nil).(*encdec)
-	require.Equal(t, defaultLock, c.encLock)
-	require.Equal(t, defaultLock, c.decLock)
-	c = NewEncodeDecoder(
-		nil,
-		NewEncodeDecoderOptions().
-			SetEncodeWithLock(true).
-			SetDecodeWithLock(true),
-	).(*encdec)
-	require.NotEqual(t, defaultLock, c.encLock)
-	require.NotEqual(t, defaultLock, c.decLock)
-}
-
 func TestEncodeDecoderReset(t *testing.T) {
 	c := NewEncodeDecoder(new(net.TCPConn), nil).(*encdec)
 	c.Close()
@@ -63,8 +49,8 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 	).(*encdec)
 
 	clientConn, serverConn := net.Pipe()
-	c.resetWriter(clientConn)
-	c.resetReader(serverConn)
+	c.enc.resetWriter(clientConn)
+	c.dec.resetReader(serverConn)
 
 	testMsg := msgpb.Message{
 		Metadata: &msgpb.Metadata{

@@ -63,39 +63,15 @@ func (opts *baseOptions) SetBufferSize(value int) BaseOptions {
 // NewEncodeDecoderOptions creates an EncodeDecoderOptions.
 func NewEncodeDecoderOptions() EncodeDecoderOptions {
 	return &encdecOptions{
-		enableWriteLock: false,
-		enableReadLock:  false,
-		encOpts:         NewBaseOptions(),
-		decOpts:         NewBaseOptions(),
+		encOpts: NewBaseOptions(),
+		decOpts: NewBaseOptions(),
 	}
 }
 
 type encdecOptions struct {
-	enableWriteLock bool
-	enableReadLock  bool
-	encOpts         BaseOptions
-	decOpts         BaseOptions
-	pool            EncodeDecoderPool
-}
-
-func (opts *encdecOptions) EncodeWithLock() bool {
-	return opts.enableWriteLock
-}
-
-func (opts *encdecOptions) SetEncodeWithLock(value bool) EncodeDecoderOptions {
-	o := *opts
-	o.enableWriteLock = value
-	return &o
-}
-
-func (opts *encdecOptions) DecodeWithLock() bool {
-	return opts.enableReadLock
-}
-
-func (opts *encdecOptions) SetDecodeWithLock(value bool) EncodeDecoderOptions {
-	o := *opts
-	o.enableReadLock = value
-	return &o
+	encOpts BaseOptions
+	decOpts BaseOptions
+	pool    EncodeDecoderPool
 }
 
 func (opts *encdecOptions) EncoderOptions() BaseOptions {

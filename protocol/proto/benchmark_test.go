@@ -34,8 +34,8 @@ func BenchmarkEncodeDecoderRoundTrip(b *testing.B) {
 			SetEncoderOptions(NewBaseOptions().SetBufferSize(1)),
 	).(*encdec)
 	mimicTCP := bytes.NewBuffer(nil)
-	c.resetWriter(mimicTCP)
-	c.resetReader(mimicTCP)
+	c.enc.resetWriter(mimicTCP)
+	c.dec.resetReader(mimicTCP)
 	encodeMsg := msgpb.Message{
 		Metadata: &msgpb.Metadata{},
 		Value:    make([]byte, 200),

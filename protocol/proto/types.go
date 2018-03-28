@@ -91,18 +91,6 @@ type BaseOptions interface {
 
 // EncodeDecoderOptions configures an EncodeDecoder.
 type EncodeDecoderOptions interface {
-	// EncodeWithLock returns whether the encode function should be guarded with a lock.
-	EncodeWithLock() bool
-
-	// SetEncodeWithLock sets EncodeWithLock.
-	SetEncodeWithLock(value bool) EncodeDecoderOptions
-
-	// DecodeWithLock returns whether the decode function should be guarded with a lock.
-	DecodeWithLock() bool
-
-	// SetDecodeWithLock sets DecodeWithLock.
-	SetDecodeWithLock(value bool) EncodeDecoderOptions
-
 	// EncoderOptions returns the options for encoder.
 	EncoderOptions() BaseOptions
 

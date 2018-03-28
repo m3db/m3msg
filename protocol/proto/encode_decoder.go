@@ -21,22 +21,12 @@
 package proto
 
 import (
-	"io"
 	"net"
-	"sync"
-)
-
-var (
-	defaultLock noopLock
 )
 
 type encdec struct {
-	sync.Mutex
-
 	conn     net.Conn
-	encLock  sync.Locker
 	enc      *encoder
-	decLock  sync.Locker
 	dec      *decoder
 	isClosed bool
 	pool     EncodeDecoderPool
@@ -52,40 +42,26 @@ func NewEncodeDecoder(
 	}
 	c := encdec{
 		conn:     conn,
-		encLock:  defaultLock,
 		enc:      newEncoder(conn, opts.EncoderOptions()),
-		decLock:  defaultLock,
 		dec:      newDecoder(conn, opts.DecoderOptions()),
 		isClosed: false,
 		pool:     opts.EncodeDecoderPool(),
-	}
-	if opts.EncodeWithLock() {
-		c.encLock = new(sync.Mutex)
-	}
-	if opts.DecodeWithLock() {
-		c.decLock = new(sync.Mutex)
 	}
 	return &c
 }
 
 func (c *encdec) Encode(msg Marshaler) error {
-	c.encLock.Lock()
 	err := c.enc.Encode(msg)
-	c.encLock.Unlock()
 	return err
 }
 
 func (c *encdec) Decode(acks Unmarshaler) error {
-	c.decLock.Lock()
 	err := c.dec.Decode(acks)
-	c.decLock.Unlock()
 	return err
 }
 
 func (c *encdec) Close() {
-	c.Lock()
 	if c.isClosed {
-		c.Unlock()
 		return
 	}
 	c.isClosed = true
@@ -96,34 +72,14 @@ func (c *encdec) Close() {
 	if c.pool != nil {
 		c.pool.Put(c)
 	}
-	c.Unlock()
 }
 
 func (c *encdec) Reset(conn net.Conn) {
-	c.Lock()
 	if c.conn != nil {
 		c.conn.Close()
 	}
-	c.resetWriter(conn)
-	c.resetReader(conn)
+	c.enc.resetWriter(conn)
+	c.dec.resetReader(conn)
 	c.conn = conn
 	c.isClosed = false
-	c.Unlock()
 }
-
-func (c *encdec) resetWriter(w io.Writer) {
-	c.encLock.Lock()
-	c.enc.resetWriter(w)
-	c.encLock.Unlock()
-}
-
-func (c *encdec) resetReader(r io.Reader) {
-	c.decLock.Lock()
-	c.dec.resetReader(r)
-	c.decLock.Unlock()
-}
-
-type noopLock struct{}
-
-func (l noopLock) Lock()   {}
-func (l noopLock) Unlock() {}
