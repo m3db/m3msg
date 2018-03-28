@@ -22,11 +22,6 @@ package proto
 
 import (
 	"io"
-	"net"
-)
-
-var (
-	defaultRW = new(net.TCPConn)
 )
 
 type encdec struct {
@@ -44,9 +39,6 @@ func NewEncodeDecoder(
 ) EncodeDecoder {
 	if opts == nil {
 		opts = NewEncodeDecoderOptions()
-	}
-	if rw == nil {
-		rw = defaultRW
 	}
 	c := encdec{
 		rw:       rw,
@@ -71,18 +63,18 @@ func (c *encdec) Close() {
 		return
 	}
 	c.isClosed = true
-	c.rw.Close()
-	c.rw = defaultRW
+	if c.rw != nil {
+		c.rw.Close()
+	}
 	if c.pool != nil {
 		c.pool.Put(c)
 	}
 }
 
 func (c *encdec) Reset(rw io.ReadWriteCloser) {
-	if rw == nil {
-		rw = defaultRW
+	if rw != nil {
+		c.rw.Close()
 	}
-	c.rw.Close()
 	c.enc.resetWriter(rw)
 	c.dec.resetReader(rw)
 	c.rw = rw
