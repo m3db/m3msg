@@ -32,21 +32,21 @@ const (
 
 var sizeEncodeDecoder = binary.BigEndian
 
-func growDataBufferIfNeeded(buffer []byte, target int, pool pool.BytesPool) []byte {
-	if len(buffer) >= target {
+func growDataBufferIfNeeded(buffer []byte, targetSize int, pool pool.BytesPool) []byte {
+	if len(buffer) >= targetSize {
 		return buffer
 	}
 	if pool != nil {
 		pool.Put(buffer)
 	}
-	return getByteSliceWithLength(target, pool)
+	return getByteSliceWithLength(targetSize, pool)
 }
 
-func getByteSliceWithLength(target int, pool pool.BytesPool) []byte {
+func getByteSliceWithLength(targetSize int, pool pool.BytesPool) []byte {
 	if pool == nil {
-		return make([]byte, target)
+		return make([]byte, targetSize)
 	}
-	b := pool.Get(target)
+	b := pool.Get(targetSize)
 	// Make sure there is enough length in the slice.
 	return b[:cap(b)]
 }

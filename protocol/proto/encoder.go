@@ -27,54 +27,54 @@ import (
 	"github.com/m3db/m3x/pool"
 )
 
-type decoder struct {
-	r          *bufio.Reader
+type encoder struct {
+	w          *bufio.Writer
 	sizeBuffer []byte
 	dataBuffer []byte
 	bytesPool  pool.BytesPool
 }
 
-// NewDecoder decodes a new decoder.
-func NewDecoder(r io.Reader, opts BaseOptions) Decoder {
-	return newDecoder(r, opts)
+// NewEncoder creates a new encoder, the implementation is not thread safe.
+func NewEncoder(w io.Writer, opts BaseOptions) Encoder {
+	return newEncoder(w, opts)
 }
 
-func newDecoder(r io.Reader, opts BaseOptions) *decoder {
+func newEncoder(w io.Writer, opts BaseOptions) *encoder {
 	if opts == nil {
 		opts = NewBaseOptions()
 	}
 	pool := opts.BytesPool()
-	return &decoder{
-		r:          bufio.NewReaderSize(r, opts.BufferSize()),
+	return &encoder{
+		w:          bufio.NewWriterSize(w, opts.BufferSize()),
 		sizeBuffer: getByteSliceWithLength(sizeBufferSize, pool),
 		bytesPool:  pool,
 	}
 }
 
-func (d *decoder) Decode(m Unmarshaler) error {
-	size, err := d.decodeSize()
+func (e *encoder) Encode(m Marshaler) error {
+	size := m.Size()
+	if err := e.encodeSize(size); err != nil {
+		return err
+	}
+	return e.encodeData(m, size)
+}
+
+func (e *encoder) encodeSize(size int) error {
+	sizeEncodeDecoder.PutUint32(e.sizeBuffer, uint32(size))
+	_, err := e.w.Write(e.sizeBuffer)
+	return err
+}
+
+func (e *encoder) encodeData(m Marshaler, size int) error {
+	e.dataBuffer = growDataBufferIfNeeded(e.dataBuffer, size, e.bytesPool)
+	size, err := m.MarshalTo(e.dataBuffer)
 	if err != nil {
 		return err
 	}
-	return d.decodeData(m, size)
+	_, err = e.w.Write(e.dataBuffer[:size])
+	return err
 }
 
-func (d *decoder) decodeSize() (int, error) {
-	if _, err := io.ReadFull(d.r, d.sizeBuffer); err != nil {
-		return 0, err
-	}
-	size := sizeEncodeDecoder.Uint32(d.sizeBuffer)
-	return int(size), nil
-}
-
-func (d *decoder) decodeData(m Unmarshaler, size int) error {
-	d.dataBuffer = growDataBufferIfNeeded(d.dataBuffer, size, d.bytesPool)
-	if _, err := io.ReadFull(d.r, d.dataBuffer[:size]); err != nil {
-		return err
-	}
-	return m.Unmarshal(d.dataBuffer[:size])
-}
-
-func (d *decoder) resetReader(r io.Reader) {
-	d.r.Reset(r)
+func (e *encoder) resetWriter(w io.Writer) {
+	e.w.Reset(w)
 }

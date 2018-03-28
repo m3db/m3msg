@@ -21,29 +21,35 @@
 package proto
 
 import (
-	"net"
+	"io"
 
 	"github.com/m3db/m3x/pool"
 )
 
 // Marshaler can be marshaled.
 type Marshaler interface {
+	// Size returns the size of the marshaled bytes.
 	Size() int
+
+	// MarshalTo marshals the marshaler into the given byte slice.
 	MarshalTo(data []byte) (int, error)
 }
 
 // Unmarshaler can be unmarshaled from bytes.
 type Unmarshaler interface {
+	// Unmarshal unmarshals the unmarshaler from the given byte slice.
 	Unmarshal(data []byte) error
 }
 
 // Encoder encodes the marshaler.
 type Encoder interface {
+	// Encode encodes the marshaler.
 	Encode(m Marshaler) error
 }
 
 // Decoder decodes into an unmarshaler.
 type Decoder interface {
+	// Decode decodes the unmarshaler.
 	Decode(m Unmarshaler) error
 }
 
@@ -56,7 +62,7 @@ type EncodeDecoder interface {
 	Close()
 
 	// Reset resets the EncodeDecoder.
-	Reset(conn net.Conn)
+	Reset(rw io.ReadWriteCloser)
 }
 
 // EncodeDecoderPool is a pool of EncodeDecoders.

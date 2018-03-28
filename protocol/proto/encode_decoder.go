@@ -21,36 +21,37 @@
 package proto
 
 import (
+	"io"
 	"net"
 )
 
 var (
-	defaultConn = new(net.TCPConn)
+	defaultRW = new(net.TCPConn)
 )
 
 type encdec struct {
-	conn     net.Conn
+	rw       io.ReadWriteCloser
 	enc      *encoder
 	dec      *decoder
 	isClosed bool
 	pool     EncodeDecoderPool
 }
 
-// NewEncodeDecoder creates an EncodeDecoder.
+// NewEncodeDecoder creates an EncodeDecoder, the implementation is not thread safe.
 func NewEncodeDecoder(
-	conn net.Conn,
+	rw io.ReadWriteCloser,
 	opts EncodeDecoderOptions,
 ) EncodeDecoder {
 	if opts == nil {
 		opts = NewEncodeDecoderOptions()
 	}
-	if conn == nil {
-		conn = defaultConn
+	if rw == nil {
+		rw = defaultRW
 	}
 	c := encdec{
-		conn:     conn,
-		enc:      newEncoder(conn, opts.EncoderOptions()),
-		dec:      newDecoder(conn, opts.DecoderOptions()),
+		rw:       rw,
+		enc:      newEncoder(rw, opts.EncoderOptions()),
+		dec:      newDecoder(rw, opts.DecoderOptions()),
 		isClosed: false,
 		pool:     opts.EncodeDecoderPool(),
 	}
@@ -58,13 +59,11 @@ func NewEncodeDecoder(
 }
 
 func (c *encdec) Encode(msg Marshaler) error {
-	err := c.enc.Encode(msg)
-	return err
+	return c.enc.Encode(msg)
 }
 
 func (c *encdec) Decode(acks Unmarshaler) error {
-	err := c.dec.Decode(acks)
-	return err
+	return c.dec.Decode(acks)
 }
 
 func (c *encdec) Close() {
@@ -72,20 +71,20 @@ func (c *encdec) Close() {
 		return
 	}
 	c.isClosed = true
-	c.conn.Close()
-	c.conn = defaultConn
+	c.rw.Close()
+	c.rw = defaultRW
 	if c.pool != nil {
 		c.pool.Put(c)
 	}
 }
 
-func (c *encdec) Reset(conn net.Conn) {
-	if conn == nil {
-		conn = defaultConn
+func (c *encdec) Reset(rw io.ReadWriteCloser) {
+	if rw == nil {
+		rw = defaultRW
 	}
-	c.conn.Close()
-	c.enc.resetWriter(conn)
-	c.dec.resetReader(conn)
-	c.conn = conn
+	c.rw.Close()
+	c.enc.resetWriter(rw)
+	c.dec.resetReader(rw)
+	c.rw = rw
 	c.isClosed = false
 }
