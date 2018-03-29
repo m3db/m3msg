@@ -24,9 +24,9 @@ package topic
 
 import "strconv"
 
-const _ConsumptionType_name = "SharedReplicated"
+const _ConsumptionType_name = "UnknownSharedReplicated"
 
-var _ConsumptionType_index = [...]uint8{0, 6, 16}
+var _ConsumptionType_index = [...]uint8{0, 7, 13, 23}
 
 func (i ConsumptionType) String() string {
 	if i < 0 || i >= ConsumptionType(len(_ConsumptionType_index)-1) {

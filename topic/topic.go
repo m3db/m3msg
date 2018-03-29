@@ -32,6 +32,7 @@ type topic struct {
 	name             string
 	numOfShards      uint32
 	consumerServices []ConsumerService
+	version          int
 }
 
 // NewTopic creates a new topic.
@@ -43,7 +44,11 @@ func NewTopicFromValue(v kv.Value) (Topic, error) {
 	if err := v.Unmarshal(&topic); err != nil {
 		return nil, err
 	}
-	return NewTopicFromProto(&topic)
+	t, err := NewTopicFromProto(&topic)
+	if err != nil {
+		return nil, err
+	}
+	return t.SetVersion(v.Version()), nil
 }
 
 // NewTopicFromProto creates a topic from a proto.
@@ -89,6 +94,16 @@ func (t *topic) ConsumerServices() []ConsumerService {
 func (t *topic) SetConsumerServices(value []ConsumerService) Topic {
 	newt := *t
 	newt.consumerServices = value
+	return &newt
+}
+
+func (t *topic) Version() int {
+	return t.version
+}
+
+func (t *topic) SetVersion(value int) Topic {
+	newt := *t
+	newt.version = value
 	return &newt
 }
 
@@ -175,8 +190,7 @@ func NewConsumptionTypeFromProto(ct topicpb.ConsumptionType) (ConsumptionType, e
 	case topicpb.ConsumptionType_REPLICATED:
 		return Replicated, nil
 	}
-	var c ConsumptionType
-	return c, fmt.Errorf("invalid consumption type in protobuf: %v", ct)
+	return Unknown, fmt.Errorf("invalid consumption type in protobuf: %v", ct)
 }
 
 // ConsumptionTypeToProto creates proto from a ConsumptionType.

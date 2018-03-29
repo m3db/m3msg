@@ -21,7 +21,13 @@
 package topic
 
 import (
+	"errors"
+
 	"github.com/m3db/m3cluster/kv"
+)
+
+var (
+	errTopicNotAvailable = errors.New("topic is not available")
 )
 
 type service struct {
@@ -79,29 +85,21 @@ func key(name string) string {
 
 // NewWatch creates a new topic watch.
 func NewWatch(w kv.ValueWatch) Watch {
-	return &watch{w: w}
+	return &watch{w}
 }
 
 type watch struct {
-	w kv.ValueWatch
+	kv.ValueWatch
 }
 
-func (w *watch) C() <-chan struct{} {
-	return w.w.C()
-}
-
-func (w *watch) Get() Topic {
-	value := w.w.Get()
+func (w *watch) Get() (Topic, error) {
+	value := w.ValueWatch.Get()
 	if value == nil {
-		return nil
+		return nil, errTopicNotAvailable
 	}
 	t, err := NewTopicFromValue(value)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return t
-}
-
-func (w *watch) Close() {
-	w.w.Close()
+	return t, nil
 }

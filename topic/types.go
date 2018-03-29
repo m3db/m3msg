@@ -45,6 +45,12 @@ type Topic interface {
 
 	// SetConsumerServices sets the consumers of the topic.
 	SetConsumerServices(value []ConsumerService) Topic
+
+	// Version returns the version of the topic.
+	Version() int
+
+	// SetVersion sets the version of the topic.
+	SetVersion(value int) Topic
 }
 
 // ConsumerService is a service that consumes the messages in a topic.
@@ -71,7 +77,7 @@ type Watch interface {
 	C() <-chan struct{}
 
 	// Get returns the latest version of the topic.
-	Get() Topic
+	Get() (Topic, error)
 
 	// Close stops watching for topic updates.
 	Close()
@@ -113,9 +119,12 @@ type ServiceOptions interface {
 type ConsumptionType int
 
 const (
+	// Unknown is the unknown consumption type.
+	Unknown ConsumptionType = iota
+
 	// Shared means the data for each shard will be
 	// shared by all the responsible instances.
-	Shared ConsumptionType = iota
+	Shared
 
 	// Replicated means the data for each shard will be
 	// replicated to all the responsible instances.

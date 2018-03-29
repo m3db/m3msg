@@ -61,28 +61,40 @@ func TestTopicService(t *testing.T) {
 		})
 	err = s.CheckAndSet(topicName, 0, topic1)
 	require.NoError(t, err)
+	err = s.CheckAndSet(topicName, 1, topic1)
+	require.NoError(t, err)
 
 	topic2, version, err := s.Get(topicName)
 	require.NoError(t, err)
-	require.Equal(t, 1, version)
+	require.Equal(t, 2, version)
+	require.Equal(t, 2, topic2.Version())
 	require.Equal(t, topic1.Name(), topic2.Name())
 	require.Equal(t, topic1.NumberOfShards(), topic2.NumberOfShards())
 	require.Equal(t, topic1.ConsumerServices(), topic2.ConsumerServices())
 
 	<-w.C()
-	require.Equal(t, topic2, w.Get())
+	topic, err := w.Get()
+	require.NoError(t, err)
+	require.Equal(t, topic2, topic)
 
 	err = s.Delete(topicName)
 	require.NoError(t, err)
 
 	<-w.C()
-	require.Nil(t, w.Get())
+	_, err = w.Get()
+	require.Error(t, err)
 
 	err = s.CheckAndSet(topicName, 0, topic1)
 	require.NoError(t, err)
 
 	<-w.C()
-	require.Equal(t, topic2, w.Get())
+	topic, err = w.Get()
+	require.NoError(t, err)
+
+	topic3, version, err := s.Get(topicName)
+	require.NoError(t, err)
+	require.Equal(t, 1, version)
+	require.Equal(t, topic3, topic)
 
 	version, err = store.Set(key(topicName), &msgpb.Message{Value: []byte("bad proto")})
 	require.NoError(t, err)
@@ -92,7 +104,8 @@ func TestTopicService(t *testing.T) {
 	require.Error(t, err)
 
 	<-w.C()
-	require.Nil(t, w.Get())
+	_, err = w.Get()
+	require.Error(t, err)
 
 	w.Close()
 }
