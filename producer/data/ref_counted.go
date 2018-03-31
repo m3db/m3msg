@@ -33,33 +33,33 @@ type OnFinalizeFn func(d producer.RefCountedData)
 
 type refCountedData struct {
 	sync.RWMutex
+	producer.Data
 
-	rc       *atomic.Int32
-	d        producer.Data
-	fn       OnFinalizeFn
-	isClosed bool
+	refCount     *atomic.Int32
+	onFinalizeFn OnFinalizeFn
+	isClosed     bool
 }
 
 // NewRefCountedData creates RefCountedData.
 func NewRefCountedData(data producer.Data, fn OnFinalizeFn) producer.RefCountedData {
 	return &refCountedData{
-		rc:       atomic.NewInt32(0),
-		d:        data,
-		fn:       fn,
-		isClosed: false,
+		Data:         data,
+		refCount:     atomic.NewInt32(0),
+		onFinalizeFn: fn,
+		isClosed:     false,
 	}
 }
 
 func (d *refCountedData) Filter(fn producer.FilterFunc) bool {
-	return fn(d.d)
+	return fn(d.Data)
 }
 
 func (d *refCountedData) IncRef() {
-	d.rc.Inc()
+	d.refCount.Inc()
 }
 
 func (d *refCountedData) DecRef() {
-	rc := d.rc.Dec()
+	rc := d.refCount.Dec()
 	if rc == 0 {
 		d.finalize(producer.Consumed)
 	}
@@ -70,11 +70,11 @@ func (d *refCountedData) DecRef() {
 
 func (d *refCountedData) Bytes() ([]byte, bool, producer.DoneFn) {
 	d.RLock()
-	return d.d.Bytes(), !d.isClosed, d.RUnlock
+	return d.Data.Bytes(), !d.isClosed, d.RUnlock
 }
 
 func (d *refCountedData) Size() uint64 {
-	return uint64(d.d.Size())
+	return uint64(d.Data.Size())
 }
 
 func (d *refCountedData) Drop() {
@@ -95,9 +95,9 @@ func (d *refCountedData) finalize(r producer.DataFinalizeReason) {
 		return
 	}
 	d.isClosed = true
-	if d.fn != nil {
-		d.fn(d)
+	if d.onFinalizeFn != nil {
+		d.onFinalizeFn(d)
 	}
-	d.d.Finalize(r)
+	d.Data.Finalize(r)
 	d.Unlock()
 }

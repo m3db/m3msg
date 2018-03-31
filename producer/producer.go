@@ -47,7 +47,7 @@ func (p *producer) Produce(data Data) error {
 	if err != nil {
 		return err
 	}
-	return p.w.Write(data.Shard(), rd)
+	return p.w.Write(rd)
 }
 
 func (p *producer) RegisterFilter(sid services.ServiceID, fn FilterFunc) {

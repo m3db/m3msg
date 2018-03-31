@@ -140,7 +140,7 @@ func TestRefCountedDataOnDropFn(t *testing.T) {
 	var called int
 	fn := func(d producer.RefCountedData) {
 		called++
-		require.Equal(t, md, d.(*refCountedData).d)
+		require.Equal(t, md, d.(*refCountedData).Data)
 	}
 
 	rd := NewRefCountedData(md, fn)

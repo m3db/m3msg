@@ -104,7 +104,7 @@ type Buffer interface {
 // Writer writes all the data out to the consumer services.
 type Writer interface {
 	// Write writes a reference counted data out.
-	Write(shard uint32, d RefCountedData) error
+	Write(d RefCountedData) error
 
 	// RegisterFilter registers a filter to a consumer service.
 	RegisterFilter(sid services.ServiceID, fn FilterFunc)
@@ -121,17 +121,8 @@ type Writer interface {
 
 // RefCountedData is a reference counted data.
 type RefCountedData interface {
-	// IncRef increments the ref count.
-	IncRef()
-
-	// DecRef decrements the ref count.
-	DecRef()
-
-	// IsClosed returns true if the underlying data has been closed.
-	IsClosed() bool
-
-	// Filter filters the data.
-	Filter(fn FilterFunc) bool
+	// Shard returns the shard of the data.
+	Shard() uint32
 
 	// Bytes returns:
 	// - underlying bytes for the data,
@@ -144,8 +135,20 @@ type RefCountedData interface {
 	// Size returns the size of the data.
 	Size() uint64
 
+	// Filter filters the data.
+	Filter(fn FilterFunc) bool
+
+	// IncRef increments the ref count.
+	IncRef()
+
+	// DecRef decrements the ref count.
+	DecRef()
+
 	// Drop drops the data without waiting for it to be acked by consumers.
 	Drop()
+
+	// IsClosed returns true if the underlying data has been closed.
+	IsClosed() bool
 }
 
 // DoneFn should be called when user is done using the bytes.
