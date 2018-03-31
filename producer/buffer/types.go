@@ -49,16 +49,22 @@ type Options interface {
 	SetOnFullStrategy(value OnFullStrategy) Options
 
 	// MaxBufferSize returns the max buffer size.
-	MaxBufferSize() uint64
+	MaxBufferSize() int
 
 	// SetMaxBufferSize sets the max buffer size.
-	SetMaxBufferSize(value uint64) Options
+	SetMaxBufferSize(value int) Options
 
 	// CleanupInterval returns the cleanup interval.
 	CleanupInterval() time.Duration
 
 	// SetCleanupInterval sets the cleanup interval.
 	SetCleanupInterval(value time.Duration) Options
+
+	// CloseCheckInterval returns the close check interval.
+	CloseCheckInterval() time.Duration
+
+	// SetCloseCheckInterval sets the close check interval.
+	SetCloseCheckInterval(value time.Duration) Options
 
 	// InstrumentOptions returns the instrument options.
 	InstrumentOptions() instrument.Options

@@ -25,42 +25,42 @@ import (
 )
 
 type producer struct {
-	b Buffer
-	w Writer
+	Buffer
+	Writer
 }
 
 // NewProducer returns a new producer.
 func NewProducer(opts Options) Producer {
 	return &producer{
-		b: opts.Buffer(),
-		w: opts.Writer(),
+		Buffer: opts.Buffer(),
+		Writer: opts.Writer(),
 	}
 }
 
 func (p *producer) Init() {
-	p.b.Init()
-	p.w.Init()
+	p.Buffer.Init()
+	p.Writer.Init()
 }
 
 func (p *producer) Produce(data Data) error {
-	rd, err := p.b.Buffer(data)
+	rd, err := p.Buffer.Buffer(data)
 	if err != nil {
 		return err
 	}
-	return p.w.Write(rd)
+	return p.Writer.Write(rd)
 }
 
 func (p *producer) RegisterFilter(sid services.ServiceID, fn FilterFunc) {
-	p.w.RegisterFilter(sid, fn)
+	p.Writer.RegisterFilter(sid, fn)
 }
 
 func (p *producer) RemoveFilter(sid services.ServiceID) {
-	p.w.RemoveFilter(sid)
+	p.Writer.UnregisterFilter(sid)
 }
 
 func (p *producer) Close() {
 	// Must close buffer first, it will stop receiving new writes
 	// and return when all data cleared up. We can safely close the writer after that.
-	p.b.Close()
-	p.w.Close()
+	p.Buffer.Close()
+	p.Writer.Close()
 }

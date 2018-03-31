@@ -42,14 +42,16 @@ var (
 type bufferMetrics struct {
 	messageDropped  tally.Counter
 	bytesDropped    tally.Counter
+	dataTooLarge    tally.Counter
 	messageBuffered tally.Gauge
 	bytesBuffered   tally.Gauge
 }
 
-func newBufferMetrics(scope tally.Scope) *bufferMetrics {
-	return &bufferMetrics{
+func newBufferMetrics(scope tally.Scope) bufferMetrics {
+	return bufferMetrics{
 		messageDropped:  scope.Counter("message-dropped"),
 		bytesDropped:    scope.Counter("bytes-dropped"),
+		dataTooLarge:    scope.Counter("data-too-large"),
 		messageBuffered: scope.Gauge("message-buffered"),
 		bytesBuffered:   scope.Gauge("bytes-buffered"),
 	}
@@ -58,11 +60,11 @@ func newBufferMetrics(scope tally.Scope) *bufferMetrics {
 type buffer struct {
 	sync.Mutex
 
-	strategy        OnFullStrategy
-	maxBufferSize   uint64
-	cleanupInterval time.Duration
-	buffer          *list.List
-	m               *bufferMetrics
+	buffers       *list.List
+	opts          Options
+	maxBufferSize uint64
+	onFinalizeFn  data.OnFinalizeFn
+	m             bufferMetrics
 
 	size     *atomic.Uint64
 	doneCh   chan struct{}
@@ -74,16 +76,17 @@ func NewBuffer(opts Options) producer.Buffer {
 	if opts == nil {
 		opts = NewBufferOptions()
 	}
-	return &buffer{
-		size:            atomic.NewUint64(0),
-		buffer:          list.New(),
-		isClosed:        false,
-		doneCh:          make(chan struct{}),
-		strategy:        opts.OnFullStrategy(),
-		maxBufferSize:   opts.MaxBufferSize(),
-		cleanupInterval: opts.CleanupInterval(),
-		m:               newBufferMetrics(opts.InstrumentOptions().MetricsScope()),
+	b := &buffer{
+		buffers:       list.New(),
+		maxBufferSize: uint64(opts.MaxBufferSize()),
+		opts:          opts,
+		m:             newBufferMetrics(opts.InstrumentOptions().MetricsScope()),
+		size:          atomic.NewUint64(0),
+		doneCh:        make(chan struct{}),
+		isClosed:      false,
 	}
+	b.onFinalizeFn = b.subSize
+	return b
 }
 
 func (b *buffer) Buffer(d producer.Data) (producer.RefCountedData, error) {
@@ -98,6 +101,7 @@ func (b *buffer) Buffer(d producer.Data) (producer.RefCountedData, error) {
 	)
 	if dataSize > maxBufferSize {
 		b.Unlock()
+		b.m.dataTooLarge.Inc(1)
 		return nil, errInvalidDataLargerThanMaxBufferSize
 	}
 	targetBufferSize := maxBufferSize - dataSize
@@ -108,14 +112,14 @@ func (b *buffer) Buffer(d producer.Data) (producer.RefCountedData, error) {
 		}
 	}
 	b.size.Add(dataSize)
-	rd := data.NewRefCountedData(d, b.subSize)
-	b.buffer.PushBack(rd)
+	rd := data.NewRefCountedData(d, b.onFinalizeFn)
+	b.buffers.PushBack(rd)
 	b.Unlock()
 	return rd, nil
 }
 
 func (b *buffer) produceOnFullWithLock(targetSize uint64) error {
-	switch b.strategy {
+	switch b.opts.OnFullStrategy() {
 	case ReturnError:
 		return errBufferFull
 	case DropEarliest:
@@ -126,7 +130,7 @@ func (b *buffer) produceOnFullWithLock(targetSize uint64) error {
 
 func (b *buffer) dropEarliestUntilTargetWithLock(targetSize uint64) {
 	var next *list.Element
-	for e := b.buffer.Front(); e != nil && b.size.Load() > targetSize; e = next {
+	for e := b.buffers.Front(); e != nil && b.size.Load() > targetSize; e = next {
 		next = e.Next()
 		d := e.Value.(producer.RefCountedData)
 		if !d.IsClosed() {
@@ -134,7 +138,7 @@ func (b *buffer) dropEarliestUntilTargetWithLock(targetSize uint64) {
 			b.m.bytesDropped.Inc(int64(d.Size()))
 			d.Drop()
 		}
-		b.buffer.Remove(e)
+		b.buffers.Remove(e)
 	}
 }
 
@@ -143,17 +147,18 @@ func (b *buffer) Init() {
 }
 
 func (b *buffer) cleanupForever() {
-	ticker := time.NewTicker(b.cleanupInterval)
+	ticker := time.NewTicker(b.opts.CleanupInterval())
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
 			b.Lock()
 			b.cleanupWithLock()
-			b.m.messageBuffered.Update(float64(b.buffer.Len()))
+			b.m.messageBuffered.Update(float64(b.buffers.Len()))
 			b.Unlock()
 			b.m.bytesBuffered.Update(float64(b.size.Load()))
 		case <-b.doneCh:
-			ticker.Stop()
 			return
 		}
 	}
@@ -161,11 +166,11 @@ func (b *buffer) cleanupForever() {
 
 func (b *buffer) cleanupWithLock() {
 	var next *list.Element
-	for e := b.buffer.Front(); e != nil; e = next {
+	for e := b.buffers.Front(); e != nil; e = next {
 		next = e.Next()
 		d := e.Value.(producer.RefCountedData)
 		if d.IsClosed() {
-			b.buffer.Remove(e)
+			b.buffers.Remove(e)
 		}
 	}
 }
@@ -183,11 +188,12 @@ func (b *buffer) Close() {
 	// Block until all data consumed.
 	for {
 		b.Lock()
-		l := b.buffer.Len()
+		l := b.buffers.Len()
 		b.Unlock()
 		if l == 0 {
 			break
 		}
+		time.Sleep(b.opts.CloseCheckInterval())
 	}
 	close(b.doneCh)
 }

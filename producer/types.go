@@ -59,8 +59,8 @@ type Producer interface {
 	// RegisterFilter registers a filter to a consumer service.
 	RegisterFilter(sid services.ServiceID, fn FilterFunc)
 
-	// RemoveFilter removes the filter of a consumer service.
-	RemoveFilter(sid services.ServiceID)
+	// UnregisterFilter unregisters the filter of a consumer service.
+	UnregisterFilter(sid services.ServiceID)
 
 	// Init initializes a producer.
 	Init()
@@ -109,8 +109,8 @@ type Writer interface {
 	// RegisterFilter registers a filter to a consumer service.
 	RegisterFilter(sid services.ServiceID, fn FilterFunc)
 
-	//RemoveFilter removes the filter of a consumer service.
-	RemoveFilter(sid services.ServiceID)
+	// UnregisterFilter unregisters the filter of a consumer service.
+	UnregisterFilter(sid services.ServiceID)
 
 	// Init initializes a writer.
 	Init() error

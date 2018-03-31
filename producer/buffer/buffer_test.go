@@ -97,7 +97,7 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	d1 := data.NewMockData("foo1")
 	d2 := data.NewMockData("foo2")
 	d3 := data.NewMockData("foo3")
-	b := NewBuffer(NewBufferOptions().SetMaxBufferSize(uint64(3 * d1.Size())))
+	b := NewBuffer(NewBufferOptions().SetMaxBufferSize(int(3 * d1.Size())))
 
 	rd1, err := b.Buffer(d1)
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestBufferReturnErrorOnFull(t *testing.T) {
 	d3 := data.NewMockData("foo3")
 	b := NewBuffer(
 		NewBufferOptions().
-			SetMaxBufferSize(uint64(3 * d1.Size())).
+			SetMaxBufferSize(int(3 * d1.Size())).
 			SetOnFullStrategy(ReturnError),
 	)
 

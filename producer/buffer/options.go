@@ -27,24 +27,27 @@ import (
 )
 
 var (
-	defaultMaxBufferSize   = uint64(1 * 1024 * 1024) // 1MB.
-	defaultCleanupInterval = time.Second
+	defaultMaxBufferSize      = 1 * 1024 * 1024 // 1MB.
+	defaultCleanupInterval    = time.Second
+	defaultCloseCheckInterval = time.Second
 )
 
 type bufferOptions struct {
-	strategy        OnFullStrategy
-	maxBufferSize   uint64
-	cleanupInterval time.Duration
-	iOpts           instrument.Options
+	strategy           OnFullStrategy
+	maxBufferSize      int
+	cleanupInterval    time.Duration
+	closeCheckInterval time.Duration
+	iOpts              instrument.Options
 }
 
 // NewBufferOptions creates a BufferOptions.
 func NewBufferOptions() Options {
 	return &bufferOptions{
-		strategy:        DropEarliest,
-		maxBufferSize:   defaultMaxBufferSize,
-		cleanupInterval: defaultCleanupInterval,
-		iOpts:           instrument.NewOptions(),
+		strategy:           DropEarliest,
+		maxBufferSize:      defaultMaxBufferSize,
+		cleanupInterval:    defaultCleanupInterval,
+		closeCheckInterval: defaultCloseCheckInterval,
+		iOpts:              instrument.NewOptions(),
 	}
 }
 
@@ -58,11 +61,11 @@ func (opts *bufferOptions) SetOnFullStrategy(value OnFullStrategy) Options {
 	return &o
 }
 
-func (opts *bufferOptions) MaxBufferSize() uint64 {
+func (opts *bufferOptions) MaxBufferSize() int {
 	return opts.maxBufferSize
 }
 
-func (opts *bufferOptions) SetMaxBufferSize(value uint64) Options {
+func (opts *bufferOptions) SetMaxBufferSize(value int) Options {
 	o := *opts
 	o.maxBufferSize = value
 	return &o
@@ -75,6 +78,16 @@ func (opts *bufferOptions) CleanupInterval() time.Duration {
 func (opts *bufferOptions) SetCleanupInterval(value time.Duration) Options {
 	o := *opts
 	o.cleanupInterval = value
+	return &o
+}
+
+func (opts *bufferOptions) CloseCheckInterval() time.Duration {
+	return opts.closeCheckInterval
+}
+
+func (opts *bufferOptions) SetCloseCheckInterval(value time.Duration) Options {
+	o := *opts
+	o.closeCheckInterval = value
 	return &o
 }
 
