@@ -78,7 +78,7 @@ func (d *refCountedData) Size() uint64 {
 }
 
 func (d *refCountedData) Drop() {
-	d.finalize(producer.Expired)
+	d.finalize(producer.Dropped)
 }
 
 func (d *refCountedData) IsClosed() bool {

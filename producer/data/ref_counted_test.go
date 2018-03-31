@@ -64,18 +64,18 @@ func TestRefCountedDataDrop(t *testing.T) {
 	rd.Drop()
 	require.True(t, rd.IsClosed())
 	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Expired, md.CloseReason())
+	require.Equal(t, producer.Dropped, md.CloseReason())
 
 	rd.IncRef()
 	rd.DecRef()
 	require.True(t, rd.IsClosed())
 	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Expired, md.CloseReason())
+	require.Equal(t, producer.Dropped, md.CloseReason())
 
 	rd.Drop()
 	require.True(t, rd.IsClosed())
 	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Expired, md.CloseReason())
+	require.Equal(t, producer.Dropped, md.CloseReason())
 }
 
 func TestRefCountedDataBytesReadBlocking(t *testing.T) {

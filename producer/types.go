@@ -31,8 +31,8 @@ const (
 	// Consumed means the data has been fully consumed.
 	Consumed DataFinalizeReason = iota
 
-	// Expired means the data has been expired.
-	Expired
+	// Dropped means the data has been dropped.
+	Dropped
 )
 
 // Data contains the data that will be produced by the producer.
