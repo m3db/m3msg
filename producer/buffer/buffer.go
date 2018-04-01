@@ -58,7 +58,7 @@ func newBufferMetrics(scope tally.Scope) bufferMetrics {
 }
 
 type buffer struct {
-	sync.Mutex
+	sync.RWMutex
 
 	buffers       *list.List
 	opts          Options
@@ -185,17 +185,29 @@ func (b *buffer) Close() {
 	b.isClosed = true
 	b.Unlock()
 
-	// Block until all data consumed.
-	for {
-		b.Lock()
-		l := b.buffers.Len()
-		b.Unlock()
-		if l == 0 {
-			break
-		}
-		time.Sleep(b.opts.CloseCheckInterval())
-	}
+	b.waitUntilAllDataConsumed()
 	close(b.doneCh)
+}
+
+func (b *buffer) waitUntilAllDataConsumed() {
+	if b.isBufferEmpty() {
+		return
+	}
+	ticker := time.NewTicker(b.opts.CloseCheckInterval())
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if b.isBufferEmpty() {
+			return
+		}
+	}
+}
+
+func (b *buffer) isBufferEmpty() bool {
+	b.RLock()
+	l := b.buffers.Len()
+	b.RUnlock()
+	return l == 0
 }
 
 func (b *buffer) subSize(d producer.RefCountedData) {

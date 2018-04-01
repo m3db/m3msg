@@ -18,54 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package data
+// mockgen rules for generating mocks for exported interfaces (reflection mode).
+//go:generate sh -c "mockgen -package=producer $PACKAGE/producer Data | mockclean -pkg $PACKAGE/producer -out $GOPATH/src/$PACKAGE/producer/data_mock.go"
 
-import (
-	"github.com/m3db/m3msg/producer"
-)
-
-// MockData is a mock for data.
-type MockData struct {
-	data        string
-	closeCalled int
-	closeReason producer.DataFinalizeReason
-}
-
-// NewMockData returns a mock of data.
-func NewMockData(str string) *MockData {
-	return &MockData{
-		data:        str,
-		closeCalled: 0,
-	}
-}
-
-// Shard returns the shard of the data.
-func (d *MockData) Shard() uint32 {
-	return 0
-}
-
-// Bytes returns the bytes of the data.
-func (d *MockData) Bytes() []byte {
-	return []byte(d.data)
-}
-
-// Size returns the size of the bytes of the data.
-func (d *MockData) Size() uint32 {
-	return uint32(len(d.data))
-}
-
-// Finalize will be called by producer to indicate the end of its lifecycle.
-func (d *MockData) Finalize(r producer.DataFinalizeReason) {
-	d.closeCalled++
-	d.closeReason = r
-}
-
-// CloseCalled returns the number of times the data is closed.
-func (d *MockData) CloseCalled() int {
-	return d.closeCalled
-}
-
-// CloseReason returns the reason why the data is closed.
-func (d *MockData) CloseReason() producer.DataFinalizeReason {
-	return d.closeReason
-}
+package mocks

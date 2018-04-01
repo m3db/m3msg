@@ -26,65 +26,68 @@ import (
 
 	"github.com/m3db/m3msg/producer"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRefCountedDataConsume(t *testing.T) {
-	md := NewMockData("foo")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+	md.EXPECT().Finalize(producer.Consumed)
+
 	rd := NewRefCountedData(md, nil)
-	require.Equal(t, rd.Size(), uint64(md.Size()))
+	require.Equal(t, uint64(md.Size()), rd.Size())
 	require.False(t, rd.IsClosed())
-	require.Equal(t, 0, md.CloseCalled())
 
 	rd.IncRef()
 	rd.DecRef()
 	require.True(t, rd.IsClosed())
-	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Consumed, md.CloseReason())
 
 	rd.IncRef()
 	rd.DecRef()
 	require.True(t, rd.IsClosed())
-	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Consumed, md.CloseReason())
 
 	rd.Drop()
 	require.True(t, rd.IsClosed())
-	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Consumed, md.CloseReason())
 }
 
 func TestRefCountedDataDrop(t *testing.T) {
-	md := NewMockData("foo")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+	md.EXPECT().Finalize(producer.Dropped)
+
 	rd := NewRefCountedData(md, nil)
-	require.Equal(t, rd.Size(), uint64(md.Size()))
+	require.Equal(t, uint64(md.Size()), rd.Size())
 	require.False(t, rd.IsClosed())
-	require.Equal(t, 0, md.CloseCalled())
 
 	rd.Drop()
 	require.True(t, rd.IsClosed())
-	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Dropped, md.CloseReason())
 
 	rd.IncRef()
 	rd.DecRef()
 	require.True(t, rd.IsClosed())
-	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Dropped, md.CloseReason())
 
 	rd.Drop()
 	require.True(t, rd.IsClosed())
-	require.Equal(t, 1, md.CloseCalled())
-	require.Equal(t, producer.Dropped, md.CloseReason())
 }
 
 func TestRefCountedDataBytesReadBlocking(t *testing.T) {
-	str := "foo"
-	md := NewMockData(str)
-	rd := NewRefCountedData(md, nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
+	md := producer.NewMockData(ctrl)
+	mockBytes := []byte("foo")
+	md.EXPECT().Bytes().Return(mockBytes)
+
+	rd := NewRefCountedData(md, nil)
 	b, ok, fn := rd.Bytes()
-	require.Equal(t, str, string(b))
+	require.Equal(t, mockBytes, b)
 	require.True(t, ok)
 	require.NotNil(t, fn)
 
@@ -102,7 +105,13 @@ func TestRefCountedDataBytesReadBlocking(t *testing.T) {
 }
 
 func TestRefCountedDataBytesInvalidAfterClose(t *testing.T) {
-	md := NewMockData("foo")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Bytes()
+	md.EXPECT().Finalize(producer.Dropped)
+
 	rd := NewRefCountedData(md, nil)
 	rd.Drop()
 	_, ok, _ := rd.Bytes()
@@ -110,37 +119,43 @@ func TestRefCountedDataBytesInvalidAfterClose(t *testing.T) {
 }
 
 func TestRefCountedDataDecPanic(t *testing.T) {
-	md := NewMockData("foo")
-	rd := NewRefCountedData(md, nil)
+	rd := NewRefCountedData(nil, nil)
 	require.Panics(t, rd.DecRef)
 }
 
 func TestRefCountedDataFilter(t *testing.T) {
-	str := "foo"
-	md := NewMockData(str)
-	rd := NewRefCountedData(md, nil)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	var called int
 	filter := func(data producer.Data) bool {
 		called++
-		if data.Shard() == 0 && string(data.Bytes()) == str {
+		if data.Shard() == 0 {
 			return true
 		}
 		return false
 	}
 
+	md := producer.NewMockData(ctrl)
+	rd := NewRefCountedData(md, nil)
+
+	md.EXPECT().Shard().Return(uint32(0))
 	require.True(t, rd.Filter(filter))
-	require.False(t, NewRefCountedData(NewMockData("bar"), nil).Filter(filter))
+
+	md.EXPECT().Shard().Return(uint32(1))
+	require.False(t, rd.Filter(filter))
 }
 
 func TestRefCountedDataOnDropFn(t *testing.T) {
-	str := "foo"
-	md := NewMockData(str)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Finalize(producer.Dropped)
 
 	var called int
 	fn := func(d producer.RefCountedData) {
 		called++
-		require.Equal(t, md, d.(*refCountedData).Data)
 	}
 
 	rd := NewRefCountedData(md, fn)

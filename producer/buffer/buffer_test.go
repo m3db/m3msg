@@ -24,92 +24,113 @@ import (
 	"testing"
 	"time"
 
-	"github.com/m3db/m3msg/producer/data"
+	"github.com/m3db/m3msg/producer"
 	"github.com/m3db/m3x/instrument"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBuffer(t *testing.T) {
-	d := data.NewMockData("foo")
-	b := NewBuffer(nil)
-	bd, err := b.Buffer(d)
-	require.NoError(t, err)
-	require.Equal(t, bd.Size(), uint64(d.Size()))
-	require.Equal(t, 0, d.CloseCalled())
-	require.Equal(t, bd.Size(), b.(*buffer).size.Load())
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+
+	b := NewBuffer(nil)
+	rd, err := b.Buffer(md)
+	require.NoError(t, err)
+	require.Equal(t, uint64(md.Size()), b.(*buffer).size.Load())
+
+	md.EXPECT().Finalize(producer.Consumed)
 	// Finalize the data will reduce the buffer size.
-	bd.IncRef()
-	bd.DecRef()
-	require.Equal(t, 1, d.CloseCalled())
-	require.Equal(t, bd.Size(), uint64(d.Size()))
+	rd.IncRef()
+	rd.DecRef()
 	require.Equal(t, 0, int(b.(*buffer).size.Load()))
 }
 
 func TestBufferWithSmallSize(t *testing.T) {
-	d := data.NewMockData("foo")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+
 	b := NewBuffer(NewBufferOptions().SetMaxBufferSize(1))
-	_, err := b.Buffer(d)
+	_, err := b.Buffer(md)
 	require.Error(t, err)
 }
 
 func TestBufferCleanupEarliest(t *testing.T) {
-	d := data.NewMockData("foo")
-	b := NewBuffer(NewBufferOptions())
-	bd, err := b.Buffer(d)
-	require.NoError(t, err)
-	require.Equal(t, bd.Size(), uint64(d.Size()))
-	require.Equal(t, 0, d.CloseCalled())
-	require.Equal(t, bd.Size(), b.(*buffer).size.Load())
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+
+	b := NewBuffer(NewBufferOptions())
+	rd, err := b.Buffer(md)
+	require.NoError(t, err)
+	require.Equal(t, rd.Size(), uint64(md.Size()))
+	require.Equal(t, rd.Size(), b.(*buffer).size.Load())
+
+	md.EXPECT().Finalize(producer.Dropped)
 	b.(*buffer).dropEarliestUntilTargetWithLock(0)
-	require.Equal(t, 1, d.CloseCalled())
-	require.Equal(t, 0, int(b.(*buffer).size.Load()))
+	require.Equal(t, uint64(0), b.(*buffer).size.Load())
 }
 
 func TestBufferCleanupBackground(t *testing.T) {
-	d := data.NewMockData("foo")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+
 	b := NewBuffer(NewBufferOptions().SetCleanupInterval(100 * time.Millisecond).SetInstrumentOptions(instrument.NewOptions())).(*buffer)
-	bd, err := b.Buffer(d)
+	rd, err := b.Buffer(md)
 	require.NoError(t, err)
-	require.Equal(t, bd.Size(), uint64(d.Size()))
-	require.Equal(t, 0, d.CloseCalled())
-	require.Equal(t, bd.Size(), b.size.Load())
+	require.Equal(t, rd.Size(), uint64(md.Size()))
+	require.Equal(t, rd.Size(), b.size.Load())
 
 	b.Init()
-	bd.IncRef()
-	bd.DecRef()
+	md.EXPECT().Finalize(producer.Consumed)
+	rd.IncRef()
+	rd.DecRef()
 
 	b.Close()
-	require.Equal(t, 1, d.CloseCalled())
 	require.Equal(t, 0, int(b.size.Load()))
-	_, err = b.Buffer(d)
+	_, err = b.Buffer(md)
 	require.Error(t, err)
 
 	// Safe to close again.
 	b.Close()
-	require.Equal(t, 1, d.CloseCalled())
 	require.Equal(t, 0, int(b.size.Load()))
 }
 
 func TestBufferDropEarliestOnFull(t *testing.T) {
-	d1 := data.NewMockData("foo1")
-	d2 := data.NewMockData("foo2")
-	d3 := data.NewMockData("foo3")
-	b := NewBuffer(NewBufferOptions().SetMaxBufferSize(int(3 * d1.Size())))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	rd1, err := b.Buffer(d1)
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+
+	b := NewBuffer(NewBufferOptions().SetMaxBufferSize(int(3 * md.Size())))
+	rd1, err := b.Buffer(md)
 	require.NoError(t, err)
-	rd2, err := b.Buffer(d2)
+	rd2, err := b.Buffer(md)
 	require.NoError(t, err)
-	rd3, err := b.Buffer(d3)
+	rd3, err := b.Buffer(md)
 	require.NoError(t, err)
 	require.False(t, rd1.IsClosed())
 	require.False(t, rd2.IsClosed())
 	require.False(t, rd3.IsClosed())
 
-	_, err = b.Buffer(data.NewMockData("foobar"))
+	md2 := producer.NewMockData(ctrl)
+	md2.EXPECT().Size().Return(2 * md.Size()).AnyTimes()
+
+	md.EXPECT().Finalize(producer.Dropped).Times(2)
+	_, err = b.Buffer(md2)
 	require.NoError(t, err)
 	require.True(t, rd1.IsClosed())
 	require.True(t, rd2.IsClosed())
@@ -117,43 +138,50 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 }
 
 func TestBufferReturnErrorOnFull(t *testing.T) {
-	d1 := data.NewMockData("foo1")
-	d2 := data.NewMockData("foo2")
-	d3 := data.NewMockData("foo3")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+
 	b := NewBuffer(
 		NewBufferOptions().
-			SetMaxBufferSize(int(3 * d1.Size())).
+			SetMaxBufferSize(int(3 * md.Size())).
 			SetOnFullStrategy(ReturnError),
 	)
 
-	rd1, err := b.Buffer(d1)
+	rd1, err := b.Buffer(md)
 	require.NoError(t, err)
-	rd2, err := b.Buffer(d2)
+	rd2, err := b.Buffer(md)
 	require.NoError(t, err)
-	rd3, err := b.Buffer(d3)
+	rd3, err := b.Buffer(md)
 	require.NoError(t, err)
 	require.False(t, rd1.IsClosed())
 	require.False(t, rd2.IsClosed())
 	require.False(t, rd3.IsClosed())
 
-	_, err = b.Buffer(data.NewMockData("foobar"))
+	_, err = b.Buffer(md)
 	require.Error(t, err)
 }
 
-func BenchmarkProduce(b *testing.B) {
-	size := 200
-	buffer := NewBuffer(
-		NewBufferOptions().
-			SetMaxBufferSize(1000 * 1000 * 200).
-			SetOnFullStrategy(DropEarliest),
-	)
-	bytes := make([]byte, size)
-	testData := data.NewMockData(string(bytes))
+// func BenchmarkProduce(b *testing.B) {
+// 	ctrl := gomock.NewController(b)
+// 	defer ctrl.Finish()
 
-	for n := 0; n < b.N; n++ {
-		_, err := buffer.Buffer(testData)
-		if err != nil {
-			b.FailNow()
-		}
-	}
-}
+// 	md := producer.NewMockData(ctrl)
+// 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+// 	md.EXPECT().Finalize(producer.Dropped).AnyTimes()
+
+// 	buffer := NewBuffer(
+// 		NewBufferOptions().
+// 			SetMaxBufferSize(1000 * 1000 * 200).
+// 			SetOnFullStrategy(DropEarliest),
+// 	)
+
+// 	for n := 0; n < b.N; n++ {
+// 		_, err := buffer.Buffer(md)
+// 		if err != nil {
+// 			b.FailNow()
+// 		}
+// 	}
+// }
