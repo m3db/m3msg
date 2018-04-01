@@ -35,19 +35,23 @@ type refCountedData struct {
 	sync.RWMutex
 	producer.Data
 
-	refCount     *atomic.Int32
 	onFinalizeFn OnFinalizeFn
-	isClosed     bool
+	doneFn       producer.DoneFn
+
+	refCount *atomic.Int32
+	isClosed bool
 }
 
 // NewRefCountedData creates RefCountedData.
 func NewRefCountedData(data producer.Data, fn OnFinalizeFn) producer.RefCountedData {
-	return &refCountedData{
+	rd := &refCountedData{
 		Data:         data,
 		refCount:     atomic.NewInt32(0),
 		onFinalizeFn: fn,
 		isClosed:     false,
 	}
+	rd.doneFn = rd.Unlock
+	return rd
 }
 
 func (d *refCountedData) Filter(fn producer.FilterFunc) bool {
@@ -70,7 +74,7 @@ func (d *refCountedData) DecRef() {
 
 func (d *refCountedData) Bytes() ([]byte, bool, producer.DoneFn) {
 	d.RLock()
-	return d.Data.Bytes(), !d.isClosed, d.RUnlock
+	return d.Data.Bytes(), !d.isClosed, d.doneFn
 }
 
 func (d *refCountedData) Size() uint64 {
