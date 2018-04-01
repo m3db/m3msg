@@ -130,10 +130,7 @@ func TestRefCountedDataFilter(t *testing.T) {
 	var called int
 	filter := func(data producer.Data) bool {
 		called++
-		if data.Shard() == 0 {
-			return true
-		}
-		return false
+		return data.Shard() == 0
 	}
 
 	md := producer.NewMockData(ctrl)
