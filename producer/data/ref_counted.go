@@ -50,7 +50,7 @@ func NewRefCountedData(data producer.Data, fn OnFinalizeFn) producer.RefCountedD
 		onFinalizeFn: fn,
 		isClosed:     false,
 	}
-	rd.doneFn = rd.Unlock
+	rd.doneFn = rd.RUnlock
 	return rd
 }
 

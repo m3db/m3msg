@@ -86,13 +86,14 @@ func TestRefCountedDataBytesReadBlocking(t *testing.T) {
 	md.EXPECT().Bytes().Return(mockBytes)
 
 	rd := NewRefCountedData(md, nil)
-	b, ok, fn := rd.Bytes()
+	b, ok, doneFn := rd.Bytes()
 	require.Equal(t, mockBytes, b)
 	require.True(t, ok)
-	require.NotNil(t, fn)
+	require.NotNil(t, doneFn)
 
 	doneCh := make(chan struct{})
 	go func() {
+		md.EXPECT().Finalize(producer.Dropped)
 		rd.Drop()
 		close(doneCh)
 	}()
@@ -102,6 +103,8 @@ func TestRefCountedDataBytesReadBlocking(t *testing.T) {
 		require.FailNow(t, "not expected")
 	case <-time.After(time.Second):
 	}
+	doneFn()
+	<-doneCh
 }
 
 func TestRefCountedDataBytesInvalidAfterClose(t *testing.T) {
