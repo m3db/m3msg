@@ -87,9 +87,9 @@ func TestRefCountedDataBytesReadBlocking(t *testing.T) {
 
 	rd := NewRefCountedData(md, nil)
 	rd.IncReads()
-	b, ok := rd.Bytes()
+	b := rd.Bytes()
 	require.Equal(t, mockBytes, b)
-	require.True(t, ok)
+	require.False(t, rd.IsDroppedOrConsumed())
 
 	doneCh := make(chan struct{})
 	go func() {
@@ -105,20 +105,7 @@ func TestRefCountedDataBytesReadBlocking(t *testing.T) {
 	}
 	rd.DecReads()
 	<-doneCh
-}
-
-func TestRefCountedDataBytesInvalidAfterClose(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	md := producer.NewMockData(ctrl)
-	md.EXPECT().Bytes()
-	md.EXPECT().Finalize(producer.Dropped)
-
-	rd := NewRefCountedData(md, nil)
-	rd.Drop()
-	_, ok := rd.Bytes()
-	require.False(t, ok)
+	require.True(t, rd.IsDroppedOrConsumed())
 }
 
 func TestRefCountedDataDecPanic(t *testing.T) {

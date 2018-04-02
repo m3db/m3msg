@@ -124,12 +124,8 @@ type RefCountedData interface {
 	// Shard returns the shard of the data.
 	Shard() uint32
 
-	// Bytes returns:
-	// - underlying bytes for the data,
-	// - a bool to indicate if the bytes are valid,
-	// The DoneFn is used to prevent the underlying bytes
-	// being recycled while the user is still using it.
-	Bytes() ([]byte, bool)
+	// Bytes returns the bytes of the data.
+	Bytes() []byte
 
 	// Size returns the size of the data.
 	Size() uint64

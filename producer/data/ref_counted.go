@@ -77,8 +77,8 @@ func (d *refCountedData) DecReads() {
 	d.RUnlock()
 }
 
-func (d *refCountedData) Bytes() ([]byte, bool) {
-	return d.Data.Bytes(), !d.isDroppedOrConsumed
+func (d *refCountedData) Bytes() []byte {
+	return d.Data.Bytes()
 }
 
 func (d *refCountedData) Size() uint64 {
