@@ -40,18 +40,18 @@ func TestRefCountedDataConsume(t *testing.T) {
 
 	rd := NewRefCountedData(md, nil)
 	require.Equal(t, uint64(md.Size()), rd.Size())
-	require.False(t, rd.IsClosed())
+	require.False(t, rd.IsDroppedOrConsumed())
 
 	rd.IncRef()
 	rd.DecRef()
-	require.True(t, rd.IsClosed())
+	require.True(t, rd.IsDroppedOrConsumed())
 
 	rd.IncRef()
 	rd.DecRef()
-	require.True(t, rd.IsClosed())
+	require.True(t, rd.IsDroppedOrConsumed())
 
 	rd.Drop()
-	require.True(t, rd.IsClosed())
+	require.True(t, rd.IsDroppedOrConsumed())
 }
 
 func TestRefCountedDataDrop(t *testing.T) {
@@ -64,17 +64,17 @@ func TestRefCountedDataDrop(t *testing.T) {
 
 	rd := NewRefCountedData(md, nil)
 	require.Equal(t, uint64(md.Size()), rd.Size())
-	require.False(t, rd.IsClosed())
+	require.False(t, rd.IsDroppedOrConsumed())
 
 	rd.Drop()
-	require.True(t, rd.IsClosed())
+	require.True(t, rd.IsDroppedOrConsumed())
 
 	rd.IncRef()
 	rd.DecRef()
-	require.True(t, rd.IsClosed())
+	require.True(t, rd.IsDroppedOrConsumed())
 
 	rd.Drop()
-	require.True(t, rd.IsClosed())
+	require.True(t, rd.IsDroppedOrConsumed())
 }
 
 func TestRefCountedDataBytesReadBlocking(t *testing.T) {
@@ -86,10 +86,10 @@ func TestRefCountedDataBytesReadBlocking(t *testing.T) {
 	md.EXPECT().Bytes().Return(mockBytes)
 
 	rd := NewRefCountedData(md, nil)
-	b, ok, doneFn := rd.Bytes()
+	rd.IncReads()
+	b, ok := rd.Bytes()
 	require.Equal(t, mockBytes, b)
 	require.True(t, ok)
-	require.NotNil(t, doneFn)
 
 	doneCh := make(chan struct{})
 	go func() {
@@ -103,7 +103,7 @@ func TestRefCountedDataBytesReadBlocking(t *testing.T) {
 		require.FailNow(t, "not expected")
 	case <-time.After(time.Second):
 	}
-	doneFn()
+	rd.DecReads()
 	<-doneCh
 }
 
@@ -117,7 +117,7 @@ func TestRefCountedDataBytesInvalidAfterClose(t *testing.T) {
 
 	rd := NewRefCountedData(md, nil)
 	rd.Drop()
-	_, ok, _ := rd.Bytes()
+	_, ok := rd.Bytes()
 	require.False(t, ok)
 }
 

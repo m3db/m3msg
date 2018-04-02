@@ -122,9 +122,9 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	require.NoError(t, err)
 	rd3, err := b.Buffer(md)
 	require.NoError(t, err)
-	require.False(t, rd1.IsClosed())
-	require.False(t, rd2.IsClosed())
-	require.False(t, rd3.IsClosed())
+	require.False(t, rd1.IsDroppedOrConsumed())
+	require.False(t, rd2.IsDroppedOrConsumed())
+	require.False(t, rd3.IsDroppedOrConsumed())
 
 	md2 := producer.NewMockData(ctrl)
 	md2.EXPECT().Size().Return(2 * md.Size()).AnyTimes()
@@ -132,9 +132,9 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	md.EXPECT().Finalize(producer.Dropped).Times(2)
 	_, err = b.Buffer(md2)
 	require.NoError(t, err)
-	require.True(t, rd1.IsClosed())
-	require.True(t, rd2.IsClosed())
-	require.False(t, rd3.IsClosed())
+	require.True(t, rd1.IsDroppedOrConsumed())
+	require.True(t, rd2.IsDroppedOrConsumed())
+	require.False(t, rd3.IsDroppedOrConsumed())
 }
 
 func TestBufferReturnErrorOnFull(t *testing.T) {
@@ -156,9 +156,9 @@ func TestBufferReturnErrorOnFull(t *testing.T) {
 	require.NoError(t, err)
 	rd3, err := b.Buffer(md)
 	require.NoError(t, err)
-	require.False(t, rd1.IsClosed())
-	require.False(t, rd2.IsClosed())
-	require.False(t, rd3.IsClosed())
+	require.False(t, rd1.IsDroppedOrConsumed())
+	require.False(t, rd2.IsDroppedOrConsumed())
+	require.False(t, rd3.IsDroppedOrConsumed())
 
 	_, err = b.Buffer(md)
 	require.Error(t, err)

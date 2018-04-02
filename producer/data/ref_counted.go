@@ -36,22 +36,19 @@ type refCountedData struct {
 	producer.Data
 
 	onFinalizeFn OnFinalizeFn
-	doneFn       producer.DoneFn
 
-	refCount *atomic.Int32
-	isClosed bool
+	refCount            *atomic.Int32
+	isDroppedOrConsumed bool
 }
 
 // NewRefCountedData creates RefCountedData.
 func NewRefCountedData(data producer.Data, fn OnFinalizeFn) producer.RefCountedData {
-	rd := &refCountedData{
-		Data:         data,
-		refCount:     atomic.NewInt32(0),
-		onFinalizeFn: fn,
-		isClosed:     false,
+	return &refCountedData{
+		Data:                data,
+		refCount:            atomic.NewInt32(0),
+		onFinalizeFn:        fn,
+		isDroppedOrConsumed: false,
 	}
-	rd.doneFn = rd.RUnlock
-	return rd
 }
 
 func (d *refCountedData) Filter(fn producer.FilterFunc) bool {
@@ -72,9 +69,16 @@ func (d *refCountedData) DecRef() {
 	}
 }
 
-func (d *refCountedData) Bytes() ([]byte, bool, producer.DoneFn) {
+func (d *refCountedData) IncReads() {
 	d.RLock()
-	return d.Data.Bytes(), !d.isClosed, d.doneFn
+}
+
+func (d *refCountedData) DecReads() {
+	d.RUnlock()
+}
+
+func (d *refCountedData) Bytes() ([]byte, bool) {
+	return d.Data.Bytes(), !d.isDroppedOrConsumed
 }
 
 func (d *refCountedData) Size() uint64 {
@@ -85,20 +89,20 @@ func (d *refCountedData) Drop() {
 	d.finalize(producer.Dropped)
 }
 
-func (d *refCountedData) IsClosed() bool {
+func (d *refCountedData) IsDroppedOrConsumed() bool {
 	d.RLock()
-	r := d.isClosed
+	r := d.isDroppedOrConsumed
 	d.RUnlock()
 	return r
 }
 
 func (d *refCountedData) finalize(r producer.DataFinalizeReason) {
 	d.Lock()
-	if d.isClosed {
+	if d.isDroppedOrConsumed {
 		d.Unlock()
 		return
 	}
-	d.isClosed = true
+	d.isDroppedOrConsumed = true
 	if d.onFinalizeFn != nil {
 		d.onFinalizeFn(d)
 	}

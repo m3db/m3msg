@@ -133,7 +133,7 @@ func (b *buffer) dropEarliestUntilTargetWithLock(targetSize uint64) {
 	for e := b.buffers.Front(); e != nil && b.size.Load() > targetSize; e = next {
 		next = e.Next()
 		d := e.Value.(producer.RefCountedData)
-		if !d.IsClosed() {
+		if !d.IsDroppedOrConsumed() {
 			b.m.messageDropped.Inc(1)
 			b.m.bytesDropped.Inc(int64(d.Size()))
 			d.Drop()
@@ -169,7 +169,7 @@ func (b *buffer) cleanupWithLock() {
 	for e := b.buffers.Front(); e != nil; e = next {
 		next = e.Next()
 		d := e.Value.(producer.RefCountedData)
-		if d.IsClosed() {
+		if d.IsDroppedOrConsumed() {
 			b.buffers.Remove(e)
 		}
 	}

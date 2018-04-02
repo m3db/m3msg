@@ -127,10 +127,9 @@ type RefCountedData interface {
 	// Bytes returns:
 	// - underlying bytes for the data,
 	// - a bool to indicate if the bytes are valid,
-	// - a DoneFn to be called after the bytes are used.
 	// The DoneFn is used to prevent the underlying bytes
 	// being recycled while the user is still using it.
-	Bytes() ([]byte, bool, DoneFn)
+	Bytes() ([]byte, bool)
 
 	// Size returns the size of the data.
 	Size() uint64
@@ -141,15 +140,19 @@ type RefCountedData interface {
 	// IncRef increments the ref count.
 	IncRef()
 
-	// DecRef decrements the ref count.
+	// DecRef decrements the ref count. If the reference count became zero after
+	// the call, the data will be finalized as consumed.
 	DecRef()
 
-	// Drop drops the data without waiting for it to be acked by consumers.
+	// IncReads increments the reads count.
+	IncReads()
+
+	// DecReads decrements the reads count.
+	DecReads()
+
+	// Drop drops the data without waiting for it to be consumed.
 	Drop()
 
-	// IsClosed returns true if the underlying data has been closed.
-	IsClosed() bool
+	// IsDroppedOrConsumed returns true if the data has been dropped or consumed.
+	IsDroppedOrConsumed() bool
 }
-
-// DoneFn should be called when user is done using the bytes.
-type DoneFn func()
