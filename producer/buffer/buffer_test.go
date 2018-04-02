@@ -31,6 +31,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNewBuffer(t *testing.T) {
+	b := NewBuffer(nil)
+	require.Equal(t, 0, int(b.(*buffer).size.Load()))
+	require.Equal(t, 0, b.(*buffer).buffers.Len())
+	b.Close()
+	// Safe to close again.
+	b.Close()
+}
+
 func TestBuffer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -87,7 +96,10 @@ func TestBufferCleanupBackground(t *testing.T) {
 	md := producer.NewMockData(ctrl)
 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(NewBufferOptions().SetCleanupInterval(100 * time.Millisecond).SetInstrumentOptions(instrument.NewOptions())).(*buffer)
+	b := NewBuffer(NewBufferOptions().
+		SetCleanupInterval(100 * time.Millisecond).
+		SetCloseCheckInterval(100 * time.Millisecond).
+		SetInstrumentOptions(instrument.NewOptions())).(*buffer)
 	rd, err := b.Buffer(md)
 	require.NoError(t, err)
 	require.Equal(t, rd.Size(), uint64(md.Size()))
@@ -102,10 +114,6 @@ func TestBufferCleanupBackground(t *testing.T) {
 	require.Equal(t, 0, int(b.size.Load()))
 	_, err = b.Buffer(md)
 	require.Error(t, err)
-
-	// Safe to close again.
-	b.Close()
-	require.Equal(t, 0, int(b.size.Load()))
 }
 
 func TestBufferDropEarliestOnFull(t *testing.T) {
@@ -164,24 +172,24 @@ func TestBufferReturnErrorOnFull(t *testing.T) {
 	require.Error(t, err)
 }
 
-// func BenchmarkProduce(b *testing.B) {
-// 	ctrl := gomock.NewController(b)
-// 	defer ctrl.Finish()
+func BenchmarkProduce(b *testing.B) {
+	ctrl := gomock.NewController(b)
+	defer ctrl.Finish()
 
-// 	md := producer.NewMockData(ctrl)
-// 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
-// 	md.EXPECT().Finalize(producer.Dropped).AnyTimes()
+	md := producer.NewMockData(ctrl)
+	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
+	md.EXPECT().Finalize(producer.Dropped).AnyTimes()
 
-// 	buffer := NewBuffer(
-// 		NewBufferOptions().
-// 			SetMaxBufferSize(1000 * 1000 * 200).
-// 			SetOnFullStrategy(DropEarliest),
-// 	)
+	buffer := NewBuffer(
+		NewBufferOptions().
+			SetMaxBufferSize(1000 * 1000 * 200).
+			SetOnFullStrategy(DropEarliest),
+	)
 
-// 	for n := 0; n < b.N; n++ {
-// 		_, err := buffer.Buffer(md)
-// 		if err != nil {
-// 			b.FailNow()
-// 		}
-// 	}
-// }
+	for n := 0; n < b.N; n++ {
+		_, err := buffer.Buffer(md)
+		if err != nil {
+			b.FailNow()
+		}
+	}
+}
