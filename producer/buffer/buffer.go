@@ -67,8 +67,9 @@ type buffer struct {
 	m             bufferMetrics
 
 	size     *atomic.Uint64
-	doneCh   chan struct{}
 	isClosed bool
+	doneCh   chan struct{}
+	closeWG  sync.WaitGroup
 }
 
 // NewBuffer returns a new buffer.
@@ -147,10 +148,13 @@ func (b *buffer) dropEarliestUntilTargetWithLock(targetSize uint64) {
 }
 
 func (b *buffer) Init() {
+	b.closeWG.Add(1)
 	go b.cleanupForever()
 }
 
 func (b *buffer) cleanupForever() {
+	defer b.closeWG.Done()
+
 	ticker := time.NewTicker(b.opts.CleanupInterval())
 	defer ticker.Stop()
 
@@ -192,6 +196,7 @@ func (b *buffer) Close() {
 
 	b.waitUntilAllDataConsumed()
 	close(b.doneCh)
+	b.closeWG.Wait()
 }
 
 func (b *buffer) waitUntilAllDataConsumed() {

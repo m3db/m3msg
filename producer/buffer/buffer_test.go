@@ -32,15 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewBuffer(t *testing.T) {
-	b := NewBuffer(nil)
-	require.Equal(t, 0, int(b.(*buffer).size.Load()))
-	require.Equal(t, 0, b.(*buffer).buffers.Len())
-	b.Close()
-	// Safe to close again.
-	b.Close()
-}
-
 func TestBuffer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -49,6 +40,9 @@ func TestBuffer(t *testing.T) {
 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
 	b := NewBuffer(nil)
+	require.Equal(t, 0, int(b.(*buffer).size.Load()))
+	require.Equal(t, 0, b.(*buffer).buffers.Len())
+
 	rd, err := b.Add(md)
 	require.NoError(t, err)
 	require.Equal(t, uint64(md.Size()), b.(*buffer).size.Load())
@@ -117,6 +111,8 @@ func TestBufferCleanupBackground(t *testing.T) {
 	require.Equal(t, 0, int(b.size.Load()))
 	_, err = b.Add(md)
 	require.Error(t, err)
+	// Safe to close again.
+	b.Close()
 }
 
 func TestBufferDropEarliestOnFull(t *testing.T) {
