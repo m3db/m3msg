@@ -18,10 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// mockgen rules for generating mocks for exported interfaces (reflection mode).
-//go:generate sh -c "mockgen -package=producer $PACKAGE/producer Data | mockclean -pkg $PACKAGE/producer -out $GOPATH/src/$PACKAGE/producer/data_mock.go"
+package writer
 
-// mockgen rules for generating mocks for unexported interfaces (file mode).
-//go:generate sh -c "mockgen -package=writer -destination=$GOPATH/src/$PACKAGE/producer/writer/router_mock.go -source=$GOPATH/src/$PACKAGE/producer/writer/router.go"
-
-package mocks
+type ackRouter interface {
+	// Ack acks the metadata.
+	Ack(ack metadata) error
+}
