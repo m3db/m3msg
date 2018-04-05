@@ -1,5 +1,5 @@
 hash: ab891c8790fe2d4bae0c58f4aaeafad6f6a6ed1f93d92b0c0aeeaf610cd34626
-updated: 2018-03-30T14:16:51.785057-04:00
+updated: 2018-04-05T11:46:06.771993-04:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -14,10 +14,9 @@ imports:
 - name: github.com/gogo/protobuf
   version: 1adfc126b41513cc696b209667c8656ea7aac67c
 - name: github.com/golang/mock
-  version: 13f360950a79f5864a972c786a10a50e44b69541
+  version: 0d6884b72b943387bb12268d5178dde0e759e49a
   subpackages:
   - gomock
-  - mockgen
 - name: github.com/golang/protobuf
   version: 925541529c1fa6821df4e44ce2723319eb2be768
   subpackages:
@@ -52,7 +51,7 @@ imports:
   - resource
   - watch
 - name: github.com/shirou/gopsutil
-  version: 5776ff9c7c5d063d574ef53d740f75c68b448e53
+  version: fc04d2dd9a512906a2604242b35275179e250eda
   subpackages:
   - cpu
   - host
@@ -85,6 +84,10 @@ imports:
   - internal/color
   - internal/exit
   - zapcore
+- name: golang.org/x/net
+  version: ab5485076ff3407ad2d02db054635913f017b0ed
+  subpackages:
+  - context
 - name: golang.org/x/sys
   version: d4feaf1a7e61e1d9e79e6c4e76c6349e9cab0a03
   repo: https://github.com/golang/sys
@@ -93,6 +96,8 @@ imports:
   - unix
   - windows
 testImports:
+- name: github.com/fortytw2/leaktest
+  version: 7dad53304f9614c1c365755c1176a8e876fee3e8
 - name: github.com/stretchr/testify
   version: 232e8563676cd15c3a36ba5e675ad4312ac4cb11
   subpackages:
