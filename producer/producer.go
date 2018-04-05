@@ -20,10 +20,6 @@
 
 package producer
 
-import (
-	"github.com/m3db/m3cluster/services"
-)
-
 type producer struct {
 	Buffer
 	Writer
@@ -43,19 +39,11 @@ func (p *producer) Init() {
 }
 
 func (p *producer) Produce(data Data) error {
-	rd, err := p.Buffer.Buffer(data)
+	rd, err := p.Buffer.Add(data)
 	if err != nil {
 		return err
 	}
 	return p.Writer.Write(rd)
-}
-
-func (p *producer) RegisterFilter(sid services.ServiceID, fn FilterFunc) {
-	p.Writer.RegisterFilter(sid, fn)
-}
-
-func (p *producer) RemoveFilter(sid services.ServiceID) {
-	p.Writer.UnregisterFilter(sid)
 }
 
 func (p *producer) Close() {

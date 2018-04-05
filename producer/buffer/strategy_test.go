@@ -29,11 +29,32 @@ import (
 
 func TestStrategyYamlUnmarshal(t *testing.T) {
 	var cfg OnFullStrategy
-	require.NoError(t, yaml.Unmarshal([]byte("dropEarliest"), &cfg))
-	require.Equal(t, DropEarliest, cfg)
-
-	require.NoError(t, yaml.Unmarshal([]byte("returnError"), &cfg))
-	require.Equal(t, ReturnError, cfg)
-
-	require.Error(t, yaml.Unmarshal([]byte("bad"), &cfg))
+	tests := []struct {
+		bytes            []byte
+		expectErr        bool
+		expectedStrategy OnFullStrategy
+	}{
+		{
+			bytes:            []byte("dropEarliest"),
+			expectErr:        false,
+			expectedStrategy: DropEarliest,
+		},
+		{
+			bytes:            []byte("returnError"),
+			expectErr:        false,
+			expectedStrategy: ReturnError,
+		},
+		{
+			bytes:     []byte("bad"),
+			expectErr: true,
+		},
+	}
+	for _, test := range tests {
+		err := yaml.Unmarshal(test.bytes, &cfg)
+		if test.expectErr {
+			require.Error(t, err)
+			continue
+		}
+		require.Equal(t, test.expectedStrategy, cfg)
+	}
 }

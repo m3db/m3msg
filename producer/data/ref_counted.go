@@ -85,8 +85,8 @@ func (d *refCountedData) Size() uint64 {
 	return uint64(d.Data.Size())
 }
 
-func (d *refCountedData) Drop() {
-	d.finalize(producer.Dropped)
+func (d *refCountedData) Drop() bool {
+	return d.finalize(producer.Dropped)
 }
 
 func (d *refCountedData) IsDroppedOrConsumed() bool {
@@ -96,16 +96,17 @@ func (d *refCountedData) IsDroppedOrConsumed() bool {
 	return r
 }
 
-func (d *refCountedData) finalize(r producer.DataFinalizeReason) {
+func (d *refCountedData) finalize(r producer.DataFinalizeReason) bool {
 	d.Lock()
 	if d.isDroppedOrConsumed {
 		d.Unlock()
-		return
+		return false
 	}
 	d.isDroppedOrConsumed = true
+	d.Unlock()
 	if d.onFinalizeFn != nil {
 		d.onFinalizeFn(d)
 	}
 	d.Data.Finalize(r)
-	d.Unlock()
+	return true
 }

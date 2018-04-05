@@ -89,7 +89,7 @@ func NewBuffer(opts Options) producer.Buffer {
 	return b
 }
 
-func (b *buffer) Buffer(d producer.Data) (producer.RefCountedData, error) {
+func (b *buffer) Add(d producer.Data) (producer.RefCountedData, error) {
 	b.Lock()
 	if b.isClosed {
 		b.Unlock()
@@ -133,12 +133,16 @@ func (b *buffer) dropEarliestUntilTargetWithLock(targetSize uint64) {
 	for e := b.buffers.Front(); e != nil && b.size.Load() > targetSize; e = next {
 		next = e.Next()
 		d := e.Value.(producer.RefCountedData)
-		if !d.IsDroppedOrConsumed() {
+		b.buffers.Remove(e)
+		if d.IsDroppedOrConsumed() {
+			continue
+		}
+		// There is a chance that the data is consumed right before
+		// the drop call which will lead drop to return false.
+		if d.Drop() {
 			b.m.messageDropped.Inc(1)
 			b.m.bytesDropped.Inc(int64(d.Size()))
-			d.Drop()
 		}
-		b.buffers.Remove(e)
 	}
 }
 
@@ -155,8 +159,9 @@ func (b *buffer) cleanupForever() {
 		case <-ticker.C:
 			b.Lock()
 			b.cleanupWithLock()
-			b.m.messageBuffered.Update(float64(b.buffers.Len()))
+			l := b.buffers.Len()
 			b.Unlock()
+			b.m.messageBuffered.Update(float64(l))
 			b.m.bytesBuffered.Update(float64(b.size.Load()))
 		case <-b.doneCh:
 			return

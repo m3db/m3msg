@@ -146,6 +146,8 @@ func TestRefCountedDataOnDropFn(t *testing.T) {
 	}
 
 	rd := NewRefCountedData(md, fn)
-	rd.Drop()
+	require.True(t, rd.Drop())
 	require.Equal(t, 1, called)
+
+	require.False(t, rd.Drop())
 }

@@ -90,8 +90,8 @@ type Options interface {
 
 // Buffer buffers all the data in the producer.
 type Buffer interface {
-	// Buffer buffers a data and returns a reference counted data.
-	Buffer(data Data) (RefCountedData, error)
+	// Add adds data to the buffer and returns a reference counted data.
+	Add(data Data) (RefCountedData, error)
 
 	// Init initializes the buffer.
 	Init()
@@ -147,7 +147,7 @@ type RefCountedData interface {
 	DecReads()
 
 	// Drop drops the data without waiting for it to be consumed.
-	Drop()
+	Drop() bool
 
 	// IsDroppedOrConsumed returns true if the data has been dropped or consumed.
 	IsDroppedOrConsumed() bool

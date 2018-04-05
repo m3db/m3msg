@@ -27,6 +27,7 @@ import (
 	"github.com/m3db/m3msg/producer"
 	"github.com/m3db/m3x/instrument"
 
+	"github.com/fortytw2/leaktest"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +49,7 @@ func TestBuffer(t *testing.T) {
 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
 	b := NewBuffer(nil)
-	rd, err := b.Buffer(md)
+	rd, err := b.Add(md)
 	require.NoError(t, err)
 	require.Equal(t, uint64(md.Size()), b.(*buffer).size.Load())
 
@@ -67,7 +68,7 @@ func TestBufferWithSmallSize(t *testing.T) {
 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
 	b := NewBuffer(NewBufferOptions().SetMaxBufferSize(1))
-	_, err := b.Buffer(md)
+	_, err := b.Add(md)
 	require.Error(t, err)
 }
 
@@ -79,7 +80,7 @@ func TestBufferCleanupEarliest(t *testing.T) {
 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
 	b := NewBuffer(NewBufferOptions())
-	rd, err := b.Buffer(md)
+	rd, err := b.Add(md)
 	require.NoError(t, err)
 	require.Equal(t, rd.Size(), uint64(md.Size()))
 	require.Equal(t, rd.Size(), b.(*buffer).size.Load())
@@ -90,6 +91,8 @@ func TestBufferCleanupEarliest(t *testing.T) {
 }
 
 func TestBufferCleanupBackground(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -100,7 +103,7 @@ func TestBufferCleanupBackground(t *testing.T) {
 		SetCleanupInterval(100 * time.Millisecond).
 		SetCloseCheckInterval(100 * time.Millisecond).
 		SetInstrumentOptions(instrument.NewOptions())).(*buffer)
-	rd, err := b.Buffer(md)
+	rd, err := b.Add(md)
 	require.NoError(t, err)
 	require.Equal(t, rd.Size(), uint64(md.Size()))
 	require.Equal(t, rd.Size(), b.size.Load())
@@ -112,11 +115,13 @@ func TestBufferCleanupBackground(t *testing.T) {
 
 	b.Close()
 	require.Equal(t, 0, int(b.size.Load()))
-	_, err = b.Buffer(md)
+	_, err = b.Add(md)
 	require.Error(t, err)
 }
 
 func TestBufferDropEarliestOnFull(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -124,11 +129,11 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	md.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
 	b := NewBuffer(NewBufferOptions().SetMaxBufferSize(int(3 * md.Size())))
-	rd1, err := b.Buffer(md)
+	rd1, err := b.Add(md)
 	require.NoError(t, err)
-	rd2, err := b.Buffer(md)
+	rd2, err := b.Add(md)
 	require.NoError(t, err)
-	rd3, err := b.Buffer(md)
+	rd3, err := b.Add(md)
 	require.NoError(t, err)
 	require.False(t, rd1.IsDroppedOrConsumed())
 	require.False(t, rd2.IsDroppedOrConsumed())
@@ -138,7 +143,7 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	md2.EXPECT().Size().Return(2 * md.Size()).AnyTimes()
 
 	md.EXPECT().Finalize(producer.Dropped).Times(2)
-	_, err = b.Buffer(md2)
+	_, err = b.Add(md2)
 	require.NoError(t, err)
 	require.True(t, rd1.IsDroppedOrConsumed())
 	require.True(t, rd2.IsDroppedOrConsumed())
@@ -146,6 +151,8 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 }
 
 func TestBufferReturnErrorOnFull(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -158,17 +165,17 @@ func TestBufferReturnErrorOnFull(t *testing.T) {
 			SetOnFullStrategy(ReturnError),
 	)
 
-	rd1, err := b.Buffer(md)
+	rd1, err := b.Add(md)
 	require.NoError(t, err)
-	rd2, err := b.Buffer(md)
+	rd2, err := b.Add(md)
 	require.NoError(t, err)
-	rd3, err := b.Buffer(md)
+	rd3, err := b.Add(md)
 	require.NoError(t, err)
 	require.False(t, rd1.IsDroppedOrConsumed())
 	require.False(t, rd2.IsDroppedOrConsumed())
 	require.False(t, rd3.IsDroppedOrConsumed())
 
-	_, err = b.Buffer(md)
+	_, err = b.Add(md)
 	require.Error(t, err)
 }
 
@@ -187,7 +194,7 @@ func BenchmarkProduce(b *testing.B) {
 	)
 
 	for n := 0; n < b.N; n++ {
-		_, err := buffer.Buffer(md)
+		_, err := buffer.Add(md)
 		if err != nil {
 			b.FailNow()
 		}
