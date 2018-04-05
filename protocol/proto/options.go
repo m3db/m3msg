@@ -64,11 +64,10 @@ func (opts *baseOptions) SetBufferSize(value int) BaseOptions {
 
 // NewEncodeDecoderOptions creates an EncodeDecoderOptions.
 func NewEncodeDecoderOptions() EncodeDecoderOptions {
-	opts := &encdecOptions{
+	return &encdecOptions{
 		encOpts: NewBaseOptions(),
 		decOpts: NewBaseOptions(),
 	}
-	return opts
 }
 
 type encdecOptions struct {
