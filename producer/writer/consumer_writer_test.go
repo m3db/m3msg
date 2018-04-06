@@ -119,7 +119,7 @@ func TestResetConnection(t *testing.T) {
 		require.Equal(t, "badAddress", addr)
 		return conn, nil
 	}
-	w.resetWithConnectFn(w.connectWithRetryForever)
+	w.resetWithConnectFn(w.connectWithRetry)
 	require.Equal(t, 1, called)
 }
 
@@ -158,9 +158,10 @@ func TestWriteErrorReset(t *testing.T) {
 		called++
 		return clientConn, nil
 	}
-	w.resetWithConnectFn(w.connectWithRetryForever)
-
+	w.resetWithConnectFn(w.connectWithRetry)
+	require.Equal(t, 1, called)
 	require.NoError(t, w.Write(&testMsg))
+
 	var msg msgpb.Message
 	require.NoError(t, w.encdec.Decode(&msg))
 	require.Equal(t, testMsg, msg)

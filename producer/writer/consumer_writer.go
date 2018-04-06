@@ -55,18 +55,22 @@ type consumerWriter interface {
 }
 
 type consumerWriterMetrics struct {
-	ackReadErr        tally.Counter
+	ackError          tally.Counter
+	decodeError       tally.Counter
+	encodeError       tally.Counter
 	resetConn         tally.Counter
-	resetConnError    tally.Counter
+	resetError        tally.Counter
 	connectError      tally.Counter
 	setKeepAliveError tally.Counter
 }
 
 func newConsumerWriterMetrics(scope tally.Scope) consumerWriterMetrics {
 	return consumerWriterMetrics{
-		ackReadErr:        scope.Counter("ack-read-error"),
+		ackError:          scope.Counter("ack-error"),
+		decodeError:       scope.Counter("decode-error"),
+		encodeError:       scope.Counter("encode-error"),
 		resetConn:         scope.Counter("reset-conn"),
-		resetConnError:    scope.Counter("reset-conn-error"),
+		resetError:        scope.Counter("reset-conn-error"),
 		connectError:      scope.Counter("connect-error"),
 		setKeepAliveError: scope.Counter("set-keep-alive-error"),
 	}
@@ -141,6 +145,7 @@ func (w *consumerWriterImpl) Write(m proto.Marshaler) error {
 	err := w.encdec.Encode(m)
 	w.encodeLock.Unlock()
 	if err != nil {
+		w.m.encodeError.Inc(1)
 		w.signalReset()
 	}
 	return err
@@ -150,6 +155,7 @@ func (w *consumerWriterImpl) signalReset() {
 	w.RLock()
 	lastResetNanos := w.lastResetNanos
 	w.RUnlock()
+	// Avoid resetting too frequent.
 	if w.nowFn().UnixNano() < lastResetNanos+w.resetDelayNanos {
 		return
 	}
@@ -161,8 +167,36 @@ func (w *consumerWriterImpl) signalReset() {
 
 func (w *consumerWriterImpl) Init() {
 	w.closeWG.Add(2)
-	go w.resetConnectionForever()
 	go w.readAcksForever()
+	go w.resetConnectionForever()
+}
+
+func (w *consumerWriterImpl) readAcksForever() {
+	defer w.closeWG.Done()
+
+	var acks msgpb.Ack
+	for !w.isClosed() {
+		w.decodeLock.Lock()
+		err := w.encdec.Decode(&acks)
+		w.decodeLock.Unlock()
+		if err != nil {
+			w.m.decodeError.Inc(1)
+			w.signalReset()
+			// Adding some delay here to avoid this being retried in a tight loop
+			// when underlying connection is misbehaving.
+			time.Sleep(w.opts.AckErrorRetryDelay())
+			continue
+		}
+		for _, m := range acks.Metadata {
+			if err := w.router.Ack(metadataFromProto(m)); err != nil {
+				w.m.ackError.Inc(1)
+				w.logger.Errorf("could not ack metadata, %v", err)
+			}
+		}
+		// NB(cw) The proto needs to be cleaned up because the gogo protobuf
+		// unmarshalling will append to the underlying slice.
+		acks.Metadata = acks.Metadata[:0]
+	}
 }
 
 func (w *consumerWriterImpl) resetConnectionForever() {
@@ -171,7 +205,7 @@ func (w *consumerWriterImpl) resetConnectionForever() {
 	for {
 		select {
 		case <-w.resetCh:
-			w.resetWithConnectFn(w.connectWithRetryForever)
+			w.resetWithConnectFn(w.connectWithRetry)
 		case <-w.doneCh:
 			return
 		}
@@ -182,12 +216,46 @@ func (w *consumerWriterImpl) resetWithConnectFn(fn connectFn) error {
 	w.m.resetConn.Inc(1)
 	conn, err := fn(w.addr)
 	if err != nil {
+		w.m.resetError.Inc(1)
 		w.logger.Errorf("could not connect to %s, %v", w.addr, err)
-		w.m.resetConnError.Inc(1)
 		return err
 	}
 	w.reset(conn)
 	return nil
+}
+
+func (w *consumerWriterImpl) connectWithRetry(addr string) (net.Conn, error) {
+	continueFn := func(int) bool {
+		return !w.isClosed()
+	}
+	var (
+		conn net.Conn
+		err  error
+	)
+	fn := func() error {
+		conn, err = w.connectFn(addr)
+		return err
+	}
+	if attemptErr := w.retrier.AttemptWhile(
+		continueFn,
+		fn,
+	); attemptErr != nil {
+		return nil, fmt.Errorf("failed to connect to address %s, %v", addr, attemptErr)
+	}
+	return conn, nil
+}
+
+func (w *consumerWriterImpl) connectOnce(addr string) (net.Conn, error) {
+	conn, err := net.DialTimeout("tcp", addr, w.opts.DialTimeout())
+	if err != nil {
+		w.m.connectError.Inc(1)
+		return nil, err
+	}
+	tcpConn := conn.(*net.TCPConn)
+	if err = tcpConn.SetKeepAlive(true); err != nil {
+		w.m.setKeepAliveError.Inc(1)
+	}
+	return tcpConn, nil
 }
 
 func (w *consumerWriterImpl) reset(conn net.Conn) {
@@ -220,33 +288,6 @@ func (w *consumerWriterImpl) cleanUpResetChannel() {
 	}
 }
 
-func (w *consumerWriterImpl) readAcksForever() {
-	defer w.closeWG.Done()
-
-	var acks msgpb.Ack
-	for !w.isClosed() {
-		w.decodeLock.Lock()
-		err := w.encdec.Decode(&acks)
-		w.decodeLock.Unlock()
-		if err != nil {
-			w.signalReset()
-			w.m.ackReadErr.Inc(1)
-			// Adding some delay here to avoid this being retried in a tight loop
-			// when underlying connection is misbehaving.
-			time.Sleep(w.opts.AckErrorRetryDelay())
-			continue
-		}
-		for _, m := range acks.Metadata {
-			if err := w.router.Ack(metadataFromProto(m)); err != nil {
-				w.logger.Errorf("could not ack metadata, %v", err)
-			}
-		}
-		// NB(cw) The proto needs to be cleaned up because the gogo protobuf
-		// unmarshalling will append to the underlying slice.
-		acks.Metadata = acks.Metadata[:0]
-	}
-}
-
 func (w *consumerWriterImpl) Close() {
 	w.Lock()
 	if w.closed {
@@ -259,40 +300,6 @@ func (w *consumerWriterImpl) Close() {
 
 	close(w.doneCh)
 	w.closeWG.Wait()
-}
-
-func (w *consumerWriterImpl) connectOnce(addr string) (net.Conn, error) {
-	conn, err := net.DialTimeout("tcp", addr, w.opts.DialTimeout())
-	if err != nil {
-		w.m.resetConnError.Inc(1)
-		return nil, err
-	}
-	tcpConn := conn.(*net.TCPConn)
-	if err = tcpConn.SetKeepAlive(true); err != nil {
-		w.m.setKeepAliveError.Inc(1)
-	}
-	return tcpConn, nil
-}
-
-func (w *consumerWriterImpl) connectWithRetryForever(addr string) (net.Conn, error) {
-	continueFn := func(int) bool {
-		return !w.isClosed()
-	}
-	var (
-		conn net.Conn
-		err  error
-	)
-	fn := func() error {
-		conn, err = w.connectFn(addr)
-		return err
-	}
-	if attemptErr := w.retrier.AttemptWhile(
-		continueFn,
-		fn,
-	); attemptErr != nil {
-		return nil, fmt.Errorf("failed to connect to address %s, %v", addr, attemptErr)
-	}
-	return conn, nil
 }
 
 func (w *consumerWriterImpl) isClosed() bool {
