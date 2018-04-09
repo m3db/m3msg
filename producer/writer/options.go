@@ -89,7 +89,7 @@ type Options interface {
 	// MessageRetryBackoff returns the backoff before retrying messages.
 	MessageRetryBackoff() time.Duration
 
-	// MessageRetryBackoff sets the backoff before retrying messages.
+	// SetMessageRetryBackoff sets the backoff before retrying messages.
 	SetMessageRetryBackoff(value time.Duration) Options
 
 	// CloseCheckInterval returns the close check interval.

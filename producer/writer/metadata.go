@@ -20,8 +20,17 @@
 
 package writer
 
+import "github.com/m3db/m3msg/generated/proto/msgpb"
+
 // metadata is the metadata for a message.
 type metadata struct {
 	shard uint64
 	id    uint64
+}
+
+func newMetadataFromProto(m *msgpb.Metadata) metadata {
+	return metadata{
+		shard: m.Shard,
+		id:    m.Id,
+	}
 }

@@ -68,7 +68,7 @@ func TestNewConsumerWriter(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	mockRouter.EXPECT().
-		Ack(metadataFromProto(testMsg.Metadata)).
+		Ack(newMetadataFromProto(testMsg.Metadata)).
 		Do(func(interface{}) { wg.Done() }).
 		Return(nil)
 
@@ -198,16 +198,14 @@ func TestAutoReset(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	mockRouter.EXPECT().
-		Ack(metadataFromProto(testMsg.Metadata)).
+		Ack(newMetadataFromProto(testMsg.Metadata)).
 		Do(func(interface{}) { wg.Done() }).
 		Return(nil)
 
 	w.Init()
 
 	for {
-		w.Lock()
 		l := len(w.resetCh)
-		w.Unlock()
 		if l == 0 {
 			break
 		}

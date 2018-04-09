@@ -33,6 +33,7 @@ import (
 	"github.com/m3db/m3x/retry"
 
 	"github.com/uber-go/tally"
+	"go.uber.org/atomic"
 )
 
 const (
@@ -79,8 +80,6 @@ func newConsumerWriterMetrics(scope tally.Scope) consumerWriterMetrics {
 type connectFn func(addr string) (net.Conn, error)
 
 type consumerWriterImpl struct {
-	sync.RWMutex
-
 	// encodeLock controls the access to the encode function.
 	encodeLock sync.Mutex
 	// decodeLock controls the access to the decode function.
@@ -94,11 +93,11 @@ type consumerWriterImpl struct {
 	resetDelayNanos int64
 	logger          log.Logger
 
-	lastResetNanos int64
-	closed         bool
+	lastResetNanos *atomic.Int64
+	closed         *atomic.Bool
 	doneCh         chan struct{}
 	resetCh        chan struct{}
-	closeWG        sync.WaitGroup
+	wg             sync.WaitGroup
 	m              consumerWriterMetrics
 
 	nowFn     clock.NowFn
@@ -123,8 +122,8 @@ func newConsumerWriter(
 		opts:            opts,
 		resetDelayNanos: int64(opts.ConnectionResetDelay()),
 		logger:          opts.InstrumentOptions().Logger(),
-		lastResetNanos:  0,
-		closed:          false,
+		lastResetNanos:  atomic.NewInt64(0),
+		closed:          atomic.NewBool(false),
 		doneCh:          make(chan struct{}),
 		resetCh:         make(chan struct{}, 1),
 		m:               newConsumerWriterMetrics(opts.InstrumentOptions().MetricsScope()),
@@ -152,11 +151,8 @@ func (w *consumerWriterImpl) Write(m proto.Marshaler) error {
 }
 
 func (w *consumerWriterImpl) signalReset() {
-	w.RLock()
-	lastResetNanos := w.lastResetNanos
-	w.RUnlock()
 	// Avoid resetting too frequent.
-	if w.nowFn().UnixNano() < lastResetNanos+w.resetDelayNanos {
+	if w.nowFn().UnixNano() < w.lastResetNanos.Load()+w.resetDelayNanos {
 		return
 	}
 	select {
@@ -166,16 +162,16 @@ func (w *consumerWriterImpl) signalReset() {
 }
 
 func (w *consumerWriterImpl) Init() {
-	w.closeWG.Add(2)
+	w.wg.Add(2)
 	go w.readAcksForever()
 	go w.resetConnectionForever()
 }
 
 func (w *consumerWriterImpl) readAcksForever() {
-	defer w.closeWG.Done()
+	defer w.wg.Done()
 
 	var acks msgpb.Ack
-	for !w.isClosed() {
+	for !w.closed.Load() {
 		w.decodeLock.Lock()
 		err := w.encdec.Decode(&acks)
 		w.decodeLock.Unlock()
@@ -188,7 +184,7 @@ func (w *consumerWriterImpl) readAcksForever() {
 			continue
 		}
 		for _, m := range acks.Metadata {
-			if err := w.router.Ack(metadataFromProto(m)); err != nil {
+			if err := w.router.Ack(newMetadataFromProto(m)); err != nil {
 				w.m.ackError.Inc(1)
 				w.logger.Errorf("could not ack metadata, %v", err)
 			}
@@ -200,7 +196,7 @@ func (w *consumerWriterImpl) readAcksForever() {
 }
 
 func (w *consumerWriterImpl) resetConnectionForever() {
-	defer w.closeWG.Done()
+	defer w.wg.Done()
 
 	for {
 		select {
@@ -226,7 +222,7 @@ func (w *consumerWriterImpl) resetWithConnectFn(fn connectFn) error {
 
 func (w *consumerWriterImpl) connectWithRetry(addr string) (net.Conn, error) {
 	continueFn := func(int) bool {
-		return !w.isClosed()
+		return !w.closed.Load()
 	}
 	var (
 		conn net.Conn
@@ -259,8 +255,6 @@ func (w *consumerWriterImpl) connectOnce(addr string) (net.Conn, error) {
 }
 
 func (w *consumerWriterImpl) reset(conn net.Conn) {
-	w.Lock()
-	defer w.Unlock()
 	// Close wakes up any blocking encode/decode function on the encodeDecoder.
 	// We are doing this mostly for the decode function.
 	// After which we could acquire the encode lock and decode lock.
@@ -274,7 +268,7 @@ func (w *consumerWriterImpl) reset(conn net.Conn) {
 	// NB(cw): Must set the conn with both encode lock and decode lock
 	// to avoid data race.
 	w.encdec.Reset(conn)
-	w.lastResetNanos = w.nowFn().UnixNano()
+	w.lastResetNanos.Store(w.nowFn().UnixNano())
 	w.cleanUpResetChannel()
 }
 
@@ -289,29 +283,11 @@ func (w *consumerWriterImpl) cleanUpResetChannel() {
 }
 
 func (w *consumerWriterImpl) Close() {
-	w.Lock()
-	if w.closed {
-		w.Unlock()
+	if !w.closed.CAS(false, true) {
+		// Already closed.
 		return
 	}
-	w.closed = true
 	w.encdec.Close()
-	w.Unlock()
-
 	close(w.doneCh)
-	w.closeWG.Wait()
-}
-
-func (w *consumerWriterImpl) isClosed() bool {
-	w.RLock()
-	res := w.closed
-	w.RUnlock()
-	return res
-}
-
-func metadataFromProto(m *msgpb.Metadata) metadata {
-	return metadata{
-		shard: m.Shard,
-		id:    m.Id,
-	}
+	w.wg.Wait()
 }
