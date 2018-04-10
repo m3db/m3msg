@@ -57,7 +57,7 @@ func TestNewConsumerWriter(t *testing.T) {
 	mockRouter := NewMockackRouter(ctrl)
 	opts := testOptions()
 	w := newConsumerWriter(lis.Addr().String(), mockRouter, opts).(*consumerWriterImpl)
-	require.Equal(t, 0, len(w.resetCh))
+	require.Equal(t, 0, len(w.c.resetCh))
 
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis, opts.EncodeDecoderOptions())
@@ -78,95 +78,6 @@ func TestNewConsumerWriter(t *testing.T) {
 	w.Close()
 }
 
-func TestNewConsumerWriterWithInvalidAddr(t *testing.T) {
-	w := newConsumerWriter("badAddress", nil, nil).(*consumerWriterImpl)
-	require.Equal(t, 1, len(w.resetCh))
-}
-
-func TestSignalResetConnection(t *testing.T) {
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer lis.Close()
-
-	w := newConsumerWriter(lis.Addr().String(), nil, testOptions()).(*consumerWriterImpl)
-	require.Equal(t, 0, len(w.resetCh))
-
-	w.signalReset()
-	require.Equal(t, 0, len(w.resetCh))
-
-	now := time.Now()
-	w.nowFn = func() time.Time { return now.Add(1 * time.Hour) }
-	w.signalReset()
-	require.Equal(t, 1, len(w.resetCh))
-
-	w.nowFn = func() time.Time { return now.Add(2 * time.Hour) }
-	w.signalReset()
-	require.Equal(t, 1, len(w.resetCh))
-}
-
-func TestResetConnection(t *testing.T) {
-	w := newConsumerWriter(
-		"badAddress",
-		nil,
-		testOptions(),
-	).(*consumerWriterImpl)
-	require.Error(t, w.Write(&testMsg))
-
-	var called int
-	conn := new(net.TCPConn)
-	w.connectFn = func(addr string) (net.Conn, error) {
-		called++
-		require.Equal(t, "badAddress", addr)
-		return conn, nil
-	}
-	w.resetWithConnectFn(w.connectWithRetry)
-	require.Equal(t, 1, called)
-}
-
-func TestWriteErrorReset(t *testing.T) {
-	defer leaktest.Check(t)()
-
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer lis.Close()
-
-	opts := testOptions()
-	w := newConsumerWriter(lis.Addr().String(), nil, opts).(*consumerWriterImpl)
-
-	w.encdec.Reset(new(net.TCPConn))
-	require.Equal(t, 0, len(w.resetCh))
-
-	now := time.Now()
-	w.nowFn = func() time.Time { return now.Add(1 * time.Hour) }
-	require.Error(t, w.Write(&testMsg))
-	require.Equal(t, 1, len(w.resetCh))
-
-	clientConn, serverConn := net.Pipe()
-	go func() {
-		server := proto.NewEncodeDecoder(
-			serverConn,
-			opts.EncodeDecoderOptions(),
-		)
-		var msg msgpb.Message
-		require.NoError(t, server.Decode(&msg))
-		require.Equal(t, testMsg, msg)
-		require.NoError(t, server.Encode(&testMsg))
-	}()
-
-	var called int
-	w.connectFn = func(addr string) (net.Conn, error) {
-		called++
-		return clientConn, nil
-	}
-	w.resetWithConnectFn(w.connectWithRetry)
-	require.Equal(t, 1, called)
-	require.NoError(t, w.Write(&testMsg))
-
-	var msg msgpb.Message
-	require.NoError(t, w.encdec.Decode(&msg))
-	require.Equal(t, testMsg, msg)
-}
-
 func TestAutoReset(t *testing.T) {
 	defer leaktest.Check(t)()
 
@@ -180,7 +91,7 @@ func TestAutoReset(t *testing.T) {
 		mockRouter,
 		opts,
 	).(*consumerWriterImpl)
-	require.Equal(t, 1, len(w.resetCh))
+	require.Equal(t, 1, len(w.c.resetCh))
 	require.Error(t, w.Write(&testMsg))
 
 	clientConn, serverConn := net.Pipe()
@@ -191,7 +102,7 @@ func TestAutoReset(t *testing.T) {
 		testConsumeAndAckOnConnection(t, serverConn, opts.EncodeDecoderOptions())
 	}()
 
-	w.connectFn = func(addr string) (net.Conn, error) {
+	w.c.connectFn = func(addr string) (net.Conn, error) {
 		return clientConn, nil
 	}
 
@@ -205,7 +116,7 @@ func TestAutoReset(t *testing.T) {
 	w.Init()
 
 	for {
-		l := len(w.resetCh)
+		l := len(w.c.resetCh)
 		if l == 0 {
 			break
 		}
@@ -223,11 +134,11 @@ func TestConsumerWriterClose(t *testing.T) {
 	defer lis.Close()
 
 	w := newConsumerWriter(lis.Addr().String(), nil, nil).(*consumerWriterImpl)
-	require.Equal(t, 0, len(w.resetCh))
+	require.Equal(t, 0, len(w.c.resetCh))
 	w.Close()
 	// Safe to close again.
 	w.Close()
-	_, ok := <-w.doneCh
+	_, ok := <-w.c.doneCh
 	require.False(t, ok)
 }
 
@@ -272,13 +183,10 @@ func TestConsumerWriterResetWhileDecoding(t *testing.T) {
 		w.decodeLock.Unlock()
 	}()
 	wg.Wait()
-	w.reset(defaultConn)
+	w.c.reset(new(net.TCPConn))
 }
 
 func testOptions() Options {
-	connOpts := proto.NewEncodeDecoderOptions().
-		SetEncoderOptions(proto.NewBaseOptions().SetBufferSize(1))
-
 	return NewOptions().
 		SetTopicName("topicName").
 		SetTopicWatchInitTimeout(100 * time.Millisecond).
@@ -286,9 +194,9 @@ func testOptions() Options {
 		SetAckErrorRetryDelay(100 * time.Millisecond).
 		SetMessageRetryBackoff(100 * time.Millisecond).
 		SetPlacementWatchInitTimeout(100 * time.Millisecond).
-		SetEncodeDecoderOptions(connOpts).
 		SetCloseCheckInterval(100 * time.Microsecond).
-		SetConnectionResetDelay(100 * time.Millisecond)
+		SetBufferSize(1).
+		SetConnectionResetDelay(0)
 }
 
 func testConsumeAndAckOnConnection(t *testing.T, conn net.Conn, opts proto.EncodeDecoderOptions) {
@@ -299,6 +207,7 @@ func testConsumeAndAckOnConnection(t *testing.T, conn net.Conn, opts proto.Encod
 
 	var msg msgpb.Message
 	assert.NoError(t, server.Decode(&msg))
+	assert.NotNil(t, msg.Metadata)
 
 	assert.NoError(t, server.Encode(&msgpb.Ack{
 		Metadata: []*msgpb.Metadata{

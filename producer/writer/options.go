@@ -31,7 +31,7 @@ import (
 	"github.com/m3db/m3x/retry"
 )
 
-var (
+const (
 	defaultDialTimeout               = 10 * time.Second
 	defaultMessageRetryDelay         = 5 * time.Second
 	defaultAckErrRetryDelay          = 10 * time.Second
@@ -40,6 +40,9 @@ var (
 	defaultTopicWatchInitTimeout     = 5 * time.Second
 	defaultCloseCheckInterval        = 2 * time.Second
 	defaultConnectionResetDelay      = 2 * time.Second
+	// Using 16K which provides much better performance comparing
+	// to lower values like 1k ~ 8k.
+	defaultBufferSize = 16384
 )
 
 // Options configs the writer.
@@ -122,6 +125,12 @@ type Options interface {
 	// SetConnectionRetryOptions sets the options for connection retrier.
 	SetConnectionRetryOptions(value retry.Options) Options
 
+	// BufferSize returns the size of buffer before a write or a read.
+	BufferSize() int
+
+	// SetBufferSize sets the buffer size.
+	SetBufferSize(value int) Options
+
 	// EncodeDecoderOptions returns the options for EncodeDecoder.
 	EncodeDecoderOptions() proto.EncodeDecoderOptions
 
@@ -149,6 +158,7 @@ type writerOptions struct {
 	connectionResetDelay      time.Duration
 	closeCheckInterval        time.Duration
 	rOpts                     retry.Options
+	bufferSize                int
 	encdecOpts                proto.EncodeDecoderOptions
 	iOpts                     instrument.Options
 }
@@ -166,6 +176,7 @@ func NewOptions() Options {
 		closeCheckInterval:        defaultCloseCheckInterval,
 		connectionResetDelay:      defaultConnectionResetDelay,
 		rOpts:                     retry.NewOptions(),
+		bufferSize:                defaultBufferSize,
 		encdecOpts:                proto.NewEncodeDecoderOptions(),
 		iOpts:                     instrument.NewOptions(),
 	}
@@ -298,6 +309,16 @@ func (opts *writerOptions) ConnectionResetDelay() time.Duration {
 func (opts *writerOptions) SetConnectionResetDelay(value time.Duration) Options {
 	o := *opts
 	o.connectionResetDelay = value
+	return &o
+}
+
+func (opts *writerOptions) BufferSize() int {
+	return opts.bufferSize
+}
+
+func (opts *writerOptions) SetBufferSize(value int) Options {
+	o := *opts
+	o.bufferSize = value
 	return &o
 }
 
