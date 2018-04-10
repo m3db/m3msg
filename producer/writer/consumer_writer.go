@@ -60,8 +60,6 @@ func newConsumerWriterMetrics(scope tally.Scope) consumerWriterMetrics {
 type consumerWriterImpl struct {
 	// encodeLock controls the access to the encode function.
 	encodeLock sync.Mutex
-	// decodeLock controls the access to the decode function.
-	decodeLock sync.Mutex
 	encdec     proto.EncodeDecoder
 	router     ackRouter
 	opts       Options
@@ -120,10 +118,7 @@ func (w *consumerWriterImpl) Init() {
 func (w *consumerWriterImpl) readAcksForever() {
 	var acks msgpb.Ack
 	for !w.closed.Load() {
-		w.decodeLock.Lock()
-		err := w.encdec.Decode(&acks)
-		w.decodeLock.Unlock()
-		if err != nil {
+		if err := w.encdec.Decode(&acks); err != nil {
 			w.m.decodeError.Inc(1)
 			// Adding some delay here to avoid this being retried in a tight loop
 			// when underlying connection is misbehaving.
@@ -144,6 +139,7 @@ func (w *consumerWriterImpl) readAcksForever() {
 
 func (w *consumerWriterImpl) Close() {
 	if w.closed.CAS(false, true) {
+		w.c.Close()
 		w.encdec.Close()
 		w.wg.Wait()
 	}

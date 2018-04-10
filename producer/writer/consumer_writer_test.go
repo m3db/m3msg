@@ -155,12 +155,11 @@ func TestConsumerWriterCloseWhileDecoding(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		w.decodeLock.Lock()
 		wg.Done()
 		require.Error(t, w.encdec.Decode(&testMsg))
-		w.decodeLock.Unlock()
 	}()
 	wg.Wait()
+	time.Sleep(time.Second)
 	w.Close()
 }
 
@@ -177,12 +176,11 @@ func TestConsumerWriterResetWhileDecoding(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		w.decodeLock.Lock()
 		wg.Done()
 		require.Error(t, w.encdec.Decode(&testMsg))
-		w.decodeLock.Unlock()
 	}()
 	wg.Wait()
+	time.Sleep(time.Second)
 	w.c.reset(new(net.TCPConn))
 }
 
