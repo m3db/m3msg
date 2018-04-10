@@ -125,11 +125,17 @@ type Options interface {
 	// SetConnectionRetryOptions sets the options for connection retrier.
 	SetConnectionRetryOptions(value retry.Options) Options
 
-	// BufferSize returns the size of buffer before a write or a read.
-	BufferSize() int
+	// ConnectionWriteBufferSize returns the size of buffer before a write or a read.
+	ConnectionWriteBufferSize() int
 
-	// SetBufferSize sets the buffer size.
-	SetBufferSize(value int) Options
+	// SetConnectionWriteBufferSize sets the buffer size.
+	SetConnectionWriteBufferSize(value int) Options
+
+	// ConnectionReadBufferSize returns the size of buffer before a write or a read.
+	ConnectionReadBufferSize() int
+
+	// SetConnectionWriteBufferSize sets the buffer size.
+	SetConnectionReadBufferSize(value int) Options
 
 	// EncodeDecoderOptions returns the options for EncodeDecoder.
 	EncodeDecoderOptions() proto.EncodeDecoderOptions
@@ -158,7 +164,8 @@ type writerOptions struct {
 	connectionResetDelay      time.Duration
 	closeCheckInterval        time.Duration
 	rOpts                     retry.Options
-	bufferSize                int
+	writeBufferSize           int
+	readBufferSize            int
 	encdecOpts                proto.EncodeDecoderOptions
 	iOpts                     instrument.Options
 }
@@ -176,7 +183,8 @@ func NewOptions() Options {
 		closeCheckInterval:        defaultCloseCheckInterval,
 		connectionResetDelay:      defaultConnectionResetDelay,
 		rOpts:                     retry.NewOptions(),
-		bufferSize:                defaultBufferSize,
+		writeBufferSize:           defaultBufferSize,
+		readBufferSize:            defaultBufferSize,
 		encdecOpts:                proto.NewEncodeDecoderOptions(),
 		iOpts:                     instrument.NewOptions(),
 	}
@@ -312,13 +320,23 @@ func (opts *writerOptions) SetConnectionResetDelay(value time.Duration) Options 
 	return &o
 }
 
-func (opts *writerOptions) BufferSize() int {
-	return opts.bufferSize
+func (opts *writerOptions) ConnectionWriteBufferSize() int {
+	return opts.writeBufferSize
 }
 
-func (opts *writerOptions) SetBufferSize(value int) Options {
+func (opts *writerOptions) SetConnectionWriteBufferSize(value int) Options {
 	o := *opts
-	o.bufferSize = value
+	o.writeBufferSize = value
+	return &o
+}
+
+func (opts *writerOptions) ConnectionReadBufferSize() int {
+	return opts.readBufferSize
+}
+
+func (opts *writerOptions) SetConnectionReadBufferSize(value int) Options {
+	o := *opts
+	o.readBufferSize = value
 	return &o
 }
 

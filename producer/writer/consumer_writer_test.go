@@ -221,7 +221,7 @@ func testOptions() Options {
 		SetMessageRetryBackoff(100 * time.Millisecond).
 		SetPlacementWatchInitTimeout(100 * time.Millisecond).
 		SetCloseCheckInterval(100 * time.Microsecond).
-		SetBufferSize(1).
+		SetConnectionWriteBufferSize(1).
 		SetConnectionResetDelay(0)
 }
 
