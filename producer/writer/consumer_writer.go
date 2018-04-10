@@ -100,6 +100,7 @@ func (w *consumerWriterImpl) Write(m proto.Marshaler) error {
 	err := w.encdec.Encode(m)
 	w.encodeLock.Unlock()
 	if err != nil {
+		w.c.SignalReset()
 		w.m.encodeError.Inc(1)
 	}
 	return err
@@ -119,6 +120,7 @@ func (w *consumerWriterImpl) readAcksForever() {
 	var acks msgpb.Ack
 	for !w.closed.Load() {
 		if err := w.encdec.Decode(&acks); err != nil {
+			w.c.SignalReset()
 			w.m.decodeError.Inc(1)
 			// Adding some delay here to avoid this being retried in a tight loop
 			// when underlying connection is misbehaving.

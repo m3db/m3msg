@@ -22,6 +22,7 @@ package writer
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,17 +40,30 @@ func TestSignalResetConnection(t *testing.T) {
 	)
 	require.Equal(t, 0, len(w.resetCh))
 
-	w.signalResetWithLock()
-	require.Equal(t, 0, len(w.resetCh))
+	var called int
+	w.connectFn = func(addr string) (net.Conn, error) {
+		called++
+		return nil, nil
+	}
+
+	w.SignalReset()
+	require.Equal(t, 1, len(w.resetCh))
+	require.NoError(t, w.tryResetWithConnectFn(w.connectFn))
+	require.Equal(t, 0, called)
 
 	now := time.Now()
 	w.nowFn = func() time.Time { return now.Add(1 * time.Hour) }
-	w.signalResetWithLock()
 	require.Equal(t, 1, len(w.resetCh))
+	require.NoError(t, w.tryResetWithConnectFn(w.connectFn))
+	require.Equal(t, 1, called)
+	require.Equal(t, 0, len(w.resetCh))
 
-	w.nowFn = func() time.Time { return now.Add(2 * time.Hour) }
-	w.signalResetWithLock()
+	w.SignalReset()
 	require.Equal(t, 1, len(w.resetCh))
+	w.nowFn = func() time.Time { return now.Add(2 * time.Hour) }
+	require.NoError(t, w.tryResetWithConnectFn(w.connectFn))
+	require.Equal(t, 2, called)
+	require.Equal(t, 0, len(w.resetCh))
 }
 
 func TestResetConnection(t *testing.T) {
@@ -66,32 +80,37 @@ func TestResetConnection(t *testing.T) {
 		require.Equal(t, "badAddress", addr)
 		return conn, nil
 	}
-	w.resetWithConnectFn(w.connectWithRetry)
+	w.tryResetWithConnectFn(w.connectWithRetry)
 	require.Equal(t, 1, called)
 }
 
-func TestWriteErrorReset(t *testing.T) {
+func TestRetryableConnectionBackgroundReset(t *testing.T) {
 	w := newRetryableConnection("badAddress", testOptions())
+	require.Equal(t, 1, len(w.resetCh))
 
-	w.reset(new(net.TCPConn))
-	require.Equal(t, 0, len(w.resetCh))
+	var lock sync.Mutex
+	var called int
+	conn := new(net.TCPConn)
+	w.connectFn = func(addr string) (net.Conn, error) {
+		lock.Lock()
+		defer lock.Unlock()
+
+		called++
+		require.Equal(t, "badAddress", addr)
+		return conn, nil
+	}
 
 	now := time.Now()
 	w.nowFn = func() time.Time { return now.Add(1 * time.Hour) }
-	_, err := w.Write([]byte("foo"))
-	require.Error(t, err)
-	require.Equal(t, 1, len(w.resetCh))
-}
-
-func TestReadErrorReset(t *testing.T) {
-	w := newRetryableConnection("badAddress", testOptions())
-
-	w.reset(new(net.TCPConn))
-	require.Equal(t, 0, len(w.resetCh))
-
-	now := time.Now()
-	w.nowFn = func() time.Time { return now.Add(1 * time.Hour) }
-	_, err := w.Read([]byte("foo"))
-	require.Error(t, err)
-	require.Equal(t, 1, len(w.resetCh))
+	w.Init()
+	for {
+		lock.Lock()
+		c := called
+		lock.Unlock()
+		if c > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	w.Close()
 }

@@ -78,6 +78,34 @@ func TestNewConsumerWriter(t *testing.T) {
 	w.Close()
 }
 
+func TestConsumerWriterWriteErrorTriggerReset(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	opts := testOptions()
+	w := newConsumerWriter("badAddr", nil, opts).(*consumerWriterImpl)
+	w.c.cleanUpResetChannel()
+	require.Equal(t, 0, len(w.c.resetCh))
+	require.Error(t, w.Write(&testMsg))
+	require.Equal(t, 1, len(w.c.resetCh))
+}
+
+func TestConsumerWriterReadErrorTriggerReset(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	opts := testOptions()
+	w := newConsumerWriter("badAddr", nil, opts).(*consumerWriterImpl)
+	w.c.cleanUpResetChannel()
+	w.Init()
+	for {
+		l := len(w.c.resetCh)
+		if l > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	w.Close()
+}
+
 func TestAutoReset(t *testing.T) {
 	defer leaktest.Check(t)()
 

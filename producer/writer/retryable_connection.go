@@ -112,8 +112,8 @@ func newRetryableConnection(
 	}
 
 	c.connectFn = c.connectOnce
-	if err := c.resetWithConnectFn(c.connectFn); err != nil {
-		c.signalResetWithLock()
+	if err := c.tryResetWithConnectFn(c.connectFn); err != nil {
+		c.SignalReset()
 	}
 	return c
 }
@@ -125,9 +125,6 @@ func (c *retryableConnection) Read(p []byte) (int, error) {
 		return 0, errConnNotInitialized
 	}
 	n, err := c.r.Read(p)
-	if err != nil {
-		c.signalResetWithLock()
-	}
 	c.connLock.RUnlock()
 	return n, err
 }
@@ -139,18 +136,11 @@ func (c *retryableConnection) Write(p []byte) (int, error) {
 		return 0, errConnNotInitialized
 	}
 	n, err := c.w.Write(p)
-	if err != nil {
-		c.signalResetWithLock()
-	}
 	c.connLock.RUnlock()
 	return n, err
 }
 
-func (c *retryableConnection) signalResetWithLock() {
-	// Avoid resetting too frequent.
-	if c.nowFn().UnixNano() < c.lastResetNanos+c.resetDelayNanos {
-		return
-	}
+func (c *retryableConnection) SignalReset() {
 	select {
 	case c.resetCh <- struct{}{}:
 	default:
@@ -169,15 +159,21 @@ func (c *retryableConnection) resetConnectionForever() {
 	for {
 		select {
 		case <-c.resetCh:
-			c.resetWithConnectFn(c.connectWithRetry)
+			c.tryResetWithConnectFn(c.connectWithRetry)
 		case <-c.doneCh:
-			c.conn.Close()
+			if c.conn != nil {
+				c.conn.Close()
+			}
 			return
 		}
 	}
 }
 
-func (c *retryableConnection) resetWithConnectFn(fn connectFn) error {
+func (c *retryableConnection) tryResetWithConnectFn(fn connectFn) error {
+	// Avoid resetting too frequent.
+	if c.nowFn().UnixNano() < c.lastResetNanos+c.resetDelayNanos {
+		return nil
+	}
 	c.m.resetConn.Inc(1)
 	conn, err := fn(c.addr)
 	if err != nil {
