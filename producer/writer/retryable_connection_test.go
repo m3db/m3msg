@@ -36,7 +36,7 @@ func TestSignalResetConnection(t *testing.T) {
 
 	w := newRetryableConnection(
 		lis.Addr().String(),
-		testOptions().SetConnectionResetDelay(time.Minute),
+		testConnectionOptions().SetResetDelay(time.Minute),
 	)
 	require.Equal(t, 0, len(w.resetCh))
 
@@ -46,28 +46,28 @@ func TestSignalResetConnection(t *testing.T) {
 		return nil, nil
 	}
 
-	w.SignalReset()
+	w.NotifyReset()
 	require.Equal(t, 1, len(w.resetCh))
-	require.NoError(t, w.tryResetWithConnectFn(w.connectFn))
+	require.NoError(t, w.resetWithConnectFn(w.connectFn))
 	require.Equal(t, 0, called)
 
 	now := time.Now()
 	w.nowFn = func() time.Time { return now.Add(1 * time.Hour) }
 	require.Equal(t, 1, len(w.resetCh))
-	require.NoError(t, w.tryResetWithConnectFn(w.connectFn))
+	require.NoError(t, w.resetWithConnectFn(w.connectFn))
 	require.Equal(t, 1, called)
-	require.Equal(t, 0, len(w.resetCh))
-
-	w.SignalReset()
 	require.Equal(t, 1, len(w.resetCh))
+	// Reset won't do anything as it is too soon since last reset.
+	require.NoError(t, w.resetWithConnectFn(w.connectFn))
+	require.Equal(t, 1, called)
+
 	w.nowFn = func() time.Time { return now.Add(2 * time.Hour) }
-	require.NoError(t, w.tryResetWithConnectFn(w.connectFn))
+	require.NoError(t, w.resetWithConnectFn(w.connectFn))
 	require.Equal(t, 2, called)
-	require.Equal(t, 0, len(w.resetCh))
 }
 
 func TestResetConnection(t *testing.T) {
-	w := newRetryableConnection("badAddress", testOptions())
+	w := newRetryableConnection("badAddress", testConnectionOptions())
 	require.Equal(t, 1, len(w.resetCh))
 	_, err := w.Write([]byte("foo"))
 	require.Error(t, err)
@@ -80,12 +80,12 @@ func TestResetConnection(t *testing.T) {
 		require.Equal(t, "badAddress", addr)
 		return conn, nil
 	}
-	w.tryResetWithConnectFn(w.connectWithRetry)
+	w.resetWithConnectFn(w.connectWithRetry)
 	require.Equal(t, 1, called)
 }
 
 func TestRetryableConnectionBackgroundReset(t *testing.T) {
-	w := newRetryableConnection("badAddress", testOptions())
+	w := newRetryableConnection("badAddress", testConnectionOptions())
 	require.Equal(t, 1, len(w.resetCh))
 
 	var lock sync.Mutex

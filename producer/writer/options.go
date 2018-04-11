@@ -33,8 +33,7 @@ import (
 
 const (
 	defaultDialTimeout               = 10 * time.Second
-	defaultMessageRetryDelay         = 5 * time.Second
-	defaultAckErrRetryDelay          = 10 * time.Second
+	defaultMessageRetryBackoff       = 5 * time.Second
 	defaultPlacementWatchRetryDelay  = 5 * time.Second
 	defaultPlacementWatchInitTimeout = 5 * time.Second
 	defaultTopicWatchInitTimeout     = 5 * time.Second
@@ -42,8 +41,128 @@ const (
 	defaultConnectionResetDelay      = 2 * time.Second
 	// Using 16K which provides much better performance comparing
 	// to lower values like 1k ~ 8k.
-	defaultBufferSize = 16384
+	defaultConnectionBufferSize = 16384
 )
+
+// ConnectionOptions configs the connections.
+type ConnectionOptions interface {
+	// DialTimeout returns the dial timeout.
+	DialTimeout() time.Duration
+
+	// SetDialTimeout sets the dial timeout.
+	SetDialTimeout(value time.Duration) ConnectionOptions
+
+	// ResetDelay returns the delay before resetting connection.
+	ResetDelay() time.Duration
+
+	// SetResetDelay sets the delay before resetting connection.
+	SetResetDelay(value time.Duration) ConnectionOptions
+
+	// RetryOptions returns the options for connection retrier.
+	RetryOptions() retry.Options
+
+	// SetRetryOptions sets the options for connection retrier.
+	SetRetryOptions(value retry.Options) ConnectionOptions
+
+	// WriteBufferSize returns the buffer size for write.
+	WriteBufferSize() int
+
+	// SetWriteBufferSize sets the buffer size for write.
+	SetWriteBufferSize(value int) ConnectionOptions
+
+	// ReadBufferSize returns the buffer size for read.
+	ReadBufferSize() int
+
+	// SetReadBufferSize sets the buffer size for read.
+	SetReadBufferSize(value int) ConnectionOptions
+
+	// InstrumentOptions returns the instrument options.
+	InstrumentOptions() instrument.Options
+
+	// SetInstrumentOptions sets the instrument options.
+	SetInstrumentOptions(value instrument.Options) ConnectionOptions
+}
+
+type connectionOptions struct {
+	dialTimeout     time.Duration
+	resetDelay      time.Duration
+	rOpts           retry.Options
+	writeBufferSize int
+	readBufferSize  int
+	iOpts           instrument.Options
+}
+
+// NewConnectionOptions creates ConnectionOptions.
+func NewConnectionOptions() ConnectionOptions {
+	return &connectionOptions{
+		dialTimeout:     defaultDialTimeout,
+		resetDelay:      defaultConnectionResetDelay,
+		rOpts:           retry.NewOptions(),
+		writeBufferSize: defaultConnectionBufferSize,
+		readBufferSize:  defaultConnectionBufferSize,
+		iOpts:           instrument.NewOptions(),
+	}
+}
+
+func (opts *connectionOptions) DialTimeout() time.Duration {
+	return opts.dialTimeout
+}
+
+func (opts *connectionOptions) SetDialTimeout(value time.Duration) ConnectionOptions {
+	o := *opts
+	o.dialTimeout = value
+	return &o
+}
+
+func (opts *connectionOptions) RetryOptions() retry.Options {
+	return opts.rOpts
+}
+
+func (opts *connectionOptions) SetRetryOptions(value retry.Options) ConnectionOptions {
+	o := *opts
+	o.rOpts = value
+	return &o
+}
+
+func (opts *connectionOptions) ResetDelay() time.Duration {
+	return opts.resetDelay
+}
+
+func (opts *connectionOptions) SetResetDelay(value time.Duration) ConnectionOptions {
+	o := *opts
+	o.resetDelay = value
+	return &o
+}
+
+func (opts *connectionOptions) WriteBufferSize() int {
+	return opts.writeBufferSize
+}
+
+func (opts *connectionOptions) SetWriteBufferSize(value int) ConnectionOptions {
+	o := *opts
+	o.writeBufferSize = value
+	return &o
+}
+
+func (opts *connectionOptions) ReadBufferSize() int {
+	return opts.readBufferSize
+}
+
+func (opts *connectionOptions) SetReadBufferSize(value int) ConnectionOptions {
+	o := *opts
+	o.readBufferSize = value
+	return &o
+}
+
+func (opts *connectionOptions) InstrumentOptions() instrument.Options {
+	return opts.iOpts
+}
+
+func (opts *connectionOptions) SetInstrumentOptions(value instrument.Options) ConnectionOptions {
+	o := *opts
+	o.iOpts = value
+	return &o
+}
 
 // Options configs the writer.
 type Options interface {
@@ -101,47 +220,23 @@ type Options interface {
 	// SetCloseCheckInterval sets the close check interval.
 	SetCloseCheckInterval(value time.Duration) Options
 
-	// AckErrorRetryDelay returns the delay before retring on ack errors.
-	AckErrorRetryDelay() time.Duration
+	// AckErrorRetryOptions returns the retrier for ack errors.
+	AckErrorRetryOptions() retry.Options
 
-	// SetAckErrorRetryDelay sets the delay before retring on ack errors.
-	SetAckErrorRetryDelay(value time.Duration) Options
-
-	// DialTimeout returns the dial timeout.
-	DialTimeout() time.Duration
-
-	// SetDialTimeout sets the dial timeout.
-	SetDialTimeout(value time.Duration) Options
-
-	// ConnectionResetDelay returns the delay before resetting connection.
-	ConnectionResetDelay() time.Duration
-
-	// SetConnectionResetDelay sets the delay before resetting connection.
-	SetConnectionResetDelay(value time.Duration) Options
-
-	// ConnectionRetryOptions returns the options for connection retrier.
-	ConnectionRetryOptions() retry.Options
-
-	// SetConnectionRetryOptions sets the options for connection retrier.
-	SetConnectionRetryOptions(value retry.Options) Options
-
-	// ConnectionWriteBufferSize returns the size of buffer before a write or a read.
-	ConnectionWriteBufferSize() int
-
-	// SetConnectionWriteBufferSize sets the buffer size.
-	SetConnectionWriteBufferSize(value int) Options
-
-	// ConnectionReadBufferSize returns the size of buffer before a write or a read.
-	ConnectionReadBufferSize() int
-
-	// SetConnectionWriteBufferSize sets the buffer size.
-	SetConnectionReadBufferSize(value int) Options
+	// SetAckErrorRetryOptions sets the retrier for ack errors.
+	SetAckErrorRetryOptions(value retry.Options) Options
 
 	// EncodeDecoderOptions returns the options for EncodeDecoder.
 	EncodeDecoderOptions() proto.EncodeDecoderOptions
 
 	// SetEncodeDecoderOptions sets the options for EncodeDecoder.
 	SetEncodeDecoderOptions(value proto.EncodeDecoderOptions) Options
+
+	// ConnectionOptions returns the options for connections.
+	ConnectionOptions() ConnectionOptions
+
+	// SetConnectionOptions sets the options for connections.
+	SetConnectionOptions(value ConnectionOptions) Options
 
 	// InstrumentOptions returns the instrument options.
 	InstrumentOptions() instrument.Options
@@ -151,52 +246,43 @@ type Options interface {
 }
 
 type writerOptions struct {
-	topic                     string
+	topicName                 string
 	topicService              topic.Service
 	topicWatchInitTimeout     time.Duration
-	dialTimeout               time.Duration
-	ackErrRetryDelay          time.Duration
-	messageRetryDelay         time.Duration
+	ackErrRetryOpts           retry.Options
+	messageRetryBackoff       time.Duration
 	messagePoolOptions        pool.ObjectPoolOptions
 	services                  services.Services
 	placementWatchRetryDelay  time.Duration
 	placementWatchInitTimeout time.Duration
-	connectionResetDelay      time.Duration
 	closeCheckInterval        time.Duration
-	rOpts                     retry.Options
-	writeBufferSize           int
-	readBufferSize            int
 	encdecOpts                proto.EncodeDecoderOptions
+	cOpts                     ConnectionOptions
 	iOpts                     instrument.Options
 }
 
 // NewOptions creates Options.
 func NewOptions() Options {
 	return &writerOptions{
-		dialTimeout:               defaultDialTimeout,
-		ackErrRetryDelay:          defaultAckErrRetryDelay,
-		messageRetryDelay:         defaultMessageRetryDelay,
+		ackErrRetryOpts:           retry.NewOptions(),
+		messageRetryBackoff:       defaultMessageRetryBackoff,
 		messagePoolOptions:        pool.NewObjectPoolOptions(),
 		placementWatchRetryDelay:  defaultPlacementWatchRetryDelay,
 		placementWatchInitTimeout: defaultPlacementWatchInitTimeout,
 		topicWatchInitTimeout:     defaultTopicWatchInitTimeout,
 		closeCheckInterval:        defaultCloseCheckInterval,
-		connectionResetDelay:      defaultConnectionResetDelay,
-		rOpts:                     retry.NewOptions(),
-		writeBufferSize:           defaultBufferSize,
-		readBufferSize:            defaultBufferSize,
 		encdecOpts:                proto.NewEncodeDecoderOptions(),
 		iOpts:                     instrument.NewOptions(),
 	}
 }
 
 func (opts *writerOptions) TopicName() string {
-	return opts.topic
+	return opts.topicName
 }
 
 func (opts *writerOptions) SetTopicName(value string) Options {
 	o := *opts
-	o.topic = value
+	o.topicName = value
 	return &o
 }
 
@@ -261,12 +347,12 @@ func (opts *writerOptions) SetMessagePoolOptions(value pool.ObjectPoolOptions) O
 }
 
 func (opts *writerOptions) MessageRetryBackoff() time.Duration {
-	return opts.messageRetryDelay
+	return opts.messageRetryBackoff
 }
 
 func (opts *writerOptions) SetMessageRetryBackoff(value time.Duration) Options {
 	o := *opts
-	o.messageRetryDelay = value
+	o.messageRetryBackoff = value
 	return &o
 }
 
@@ -280,63 +366,13 @@ func (opts *writerOptions) SetCloseCheckInterval(value time.Duration) Options {
 	return &o
 }
 
-func (opts *writerOptions) AckErrorRetryDelay() time.Duration {
-	return opts.ackErrRetryDelay
+func (opts *writerOptions) AckErrorRetryOptions() retry.Options {
+	return opts.ackErrRetryOpts
 }
 
-func (opts *writerOptions) SetAckErrorRetryDelay(value time.Duration) Options {
+func (opts *writerOptions) SetAckErrorRetryOptions(value retry.Options) Options {
 	o := *opts
-	o.ackErrRetryDelay = value
-	return &o
-}
-
-func (opts *writerOptions) DialTimeout() time.Duration {
-	return opts.dialTimeout
-}
-
-func (opts *writerOptions) SetDialTimeout(value time.Duration) Options {
-	o := *opts
-	o.dialTimeout = value
-	return &o
-}
-
-func (opts *writerOptions) ConnectionRetryOptions() retry.Options {
-	return opts.rOpts
-}
-
-func (opts *writerOptions) SetConnectionRetryOptions(value retry.Options) Options {
-	o := *opts
-	o.rOpts = value
-	return &o
-}
-
-func (opts *writerOptions) ConnectionResetDelay() time.Duration {
-	return opts.connectionResetDelay
-}
-
-func (opts *writerOptions) SetConnectionResetDelay(value time.Duration) Options {
-	o := *opts
-	o.connectionResetDelay = value
-	return &o
-}
-
-func (opts *writerOptions) ConnectionWriteBufferSize() int {
-	return opts.writeBufferSize
-}
-
-func (opts *writerOptions) SetConnectionWriteBufferSize(value int) Options {
-	o := *opts
-	o.writeBufferSize = value
-	return &o
-}
-
-func (opts *writerOptions) ConnectionReadBufferSize() int {
-	return opts.readBufferSize
-}
-
-func (opts *writerOptions) SetConnectionReadBufferSize(value int) Options {
-	o := *opts
-	o.readBufferSize = value
+	o.ackErrRetryOpts = value
 	return &o
 }
 
@@ -347,6 +383,16 @@ func (opts *writerOptions) EncodeDecoderOptions() proto.EncodeDecoderOptions {
 func (opts *writerOptions) SetEncodeDecoderOptions(value proto.EncodeDecoderOptions) Options {
 	o := *opts
 	o.encdecOpts = value
+	return &o
+}
+
+func (opts *writerOptions) ConnectionOptions() ConnectionOptions {
+	return opts.cOpts
+}
+
+func (opts *writerOptions) SetConnectionOptions(value ConnectionOptions) Options {
+	o := *opts
+	o.cOpts = value
 	return &o
 }
 

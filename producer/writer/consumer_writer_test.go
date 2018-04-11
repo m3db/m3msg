@@ -83,7 +83,7 @@ func TestConsumerWriterWriteErrorTriggerReset(t *testing.T) {
 
 	opts := testOptions()
 	w := newConsumerWriter("badAddr", nil, opts).(*consumerWriterImpl)
-	w.c.cleanUpResetChannel()
+	<-w.c.resetCh
 	require.Equal(t, 0, len(w.c.resetCh))
 	require.Error(t, w.Write(&testMsg))
 	require.Equal(t, 1, len(w.c.resetCh))
@@ -94,7 +94,7 @@ func TestConsumerWriterReadErrorTriggerReset(t *testing.T) {
 
 	opts := testOptions()
 	w := newConsumerWriter("badAddr", nil, opts).(*consumerWriterImpl)
-	w.c.cleanUpResetChannel()
+	<-w.c.resetCh
 	w.Init()
 	for {
 		l := len(w.c.resetCh)
@@ -217,12 +217,16 @@ func testOptions() Options {
 		SetTopicName("topicName").
 		SetTopicWatchInitTimeout(100 * time.Millisecond).
 		SetMessagePoolOptions(pool.NewObjectPoolOptions().SetSize(1)).
-		SetAckErrorRetryDelay(100 * time.Millisecond).
 		SetMessageRetryBackoff(100 * time.Millisecond).
 		SetPlacementWatchInitTimeout(100 * time.Millisecond).
 		SetCloseCheckInterval(100 * time.Microsecond).
-		SetConnectionWriteBufferSize(1).
-		SetConnectionResetDelay(0)
+		SetConnectionOptions(testConnectionOptions())
+}
+
+func testConnectionOptions() ConnectionOptions {
+	return NewConnectionOptions().
+		SetWriteBufferSize(1).
+		SetResetDelay(0)
 }
 
 func testConsumeAndAckOnConnection(t *testing.T, conn net.Conn, opts proto.EncodeDecoderOptions) {

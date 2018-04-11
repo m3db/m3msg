@@ -22,11 +22,11 @@ package writer
 
 import (
 	"sync"
-	"time"
 
 	"github.com/m3db/m3msg/generated/proto/msgpb"
 	"github.com/m3db/m3msg/protocol/proto"
 	"github.com/m3db/m3x/log"
+	"github.com/m3db/m3x/retry"
 
 	"github.com/uber-go/tally"
 	"go.uber.org/atomic"
@@ -61,12 +61,16 @@ type consumerWriterImpl struct {
 	// encodeLock controls the access to the encode function.
 	encodeLock sync.Mutex
 	encdec     proto.EncodeDecoder
+	addr       string
 	router     ackRouter
 	opts       Options
+	retrier    retry.Retrier
 	logger     log.Logger
 
+	ack    msgpb.Ack
 	c      *retryableConnection
 	closed *atomic.Bool
+	doneCh chan struct{}
 	wg     sync.WaitGroup
 	m      consumerWriterMetrics
 }
@@ -81,15 +85,18 @@ func newConsumerWriter(
 	if opts == nil {
 		opts = NewOptions()
 	}
-	conn := newRetryableConnection(addr, opts)
+	conn := newRetryableConnection(addr, opts.ConnectionOptions())
 	return &consumerWriterImpl{
-		encdec: proto.NewEncodeDecoder(conn, opts.EncodeDecoderOptions()),
-		router: router,
-		opts:   opts,
-		logger: opts.InstrumentOptions().Logger(),
-		c:      conn,
-		closed: atomic.NewBool(false),
-		m:      newConsumerWriterMetrics(opts.InstrumentOptions().MetricsScope()),
+		encdec:  proto.NewEncodeDecoder(conn, opts.EncodeDecoderOptions()),
+		addr:    addr,
+		router:  router,
+		opts:    opts,
+		retrier: retry.NewRetrier(opts.AckErrorRetryOptions()),
+		logger:  opts.InstrumentOptions().Logger(),
+		c:       conn,
+		closed:  atomic.NewBool(false),
+		doneCh:  make(chan struct{}),
+		m:       newConsumerWriterMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
 }
 
@@ -100,7 +107,7 @@ func (w *consumerWriterImpl) Write(m proto.Marshaler) error {
 	err := w.encdec.Encode(m)
 	w.encodeLock.Unlock()
 	if err != nil {
-		w.c.SignalReset()
+		w.c.NotifyReset()
 		w.m.encodeError.Inc(1)
 	}
 	return err
@@ -117,32 +124,55 @@ func (w *consumerWriterImpl) Init() {
 }
 
 func (w *consumerWriterImpl) readAcksForever() {
-	var acks msgpb.Ack
-	for !w.closed.Load() {
-		if err := w.encdec.Decode(&acks); err != nil {
-			w.c.SignalReset()
-			w.m.decodeError.Inc(1)
-			// Adding some delay here to avoid this being retried in a tight loop
-			// when underlying connection is misbehaving.
-			time.Sleep(w.opts.AckErrorRetryDelay())
-			continue
+	for {
+		select {
+		case <-w.doneCh:
+			return
+		default:
+			w.readAcksWithRetry()
 		}
-		for _, m := range acks.Metadata {
-			if err := w.router.Ack(newMetadataFromProto(m)); err != nil {
-				w.m.ackError.Inc(1)
-				w.logger.Errorf("could not ack metadata, %v", err)
-			}
-		}
-		// NB(cw) The proto needs to be cleaned up because the gogo protobuf
-		// unmarshalling will append to the underlying slice.
-		acks.Metadata = acks.Metadata[:0]
 	}
 }
 
-func (w *consumerWriterImpl) Close() {
-	if w.closed.CAS(false, true) {
-		w.c.Close()
-		w.encdec.Close()
-		w.wg.Wait()
+func (w *consumerWriterImpl) readAcksWithRetry() {
+	if err := w.retrier.AttemptWhile(
+		w.readAckContinueFn,
+		w.readAcks,
+	); err != nil {
+		w.logger.Errorf("could not read acks from %s, will retry later: %v", w.addr, err)
 	}
+}
+
+func (w *consumerWriterImpl) readAckContinueFn(int) bool {
+	return !w.closed.Load()
+}
+
+func (w *consumerWriterImpl) readAcks() error {
+	// TODO: make util function for proto reset.
+	// NB(cw) The proto needs to be cleaned up because the gogo protobuf
+	// unmarshalling will append to the underlying slice.
+	w.ack.Metadata = w.ack.Metadata[:0]
+	if err := w.encdec.Decode(&w.ack); err != nil {
+		w.c.NotifyReset()
+		w.m.decodeError.Inc(1)
+		return err
+	}
+	for _, m := range w.ack.Metadata {
+		if err := w.router.Ack(newMetadataFromProto(m)); err != nil {
+			w.m.ackError.Inc(1)
+			// This is fine, usually this means the ack has been acked.
+			w.logger.Errorf("could not ack metadata, %v", err)
+		}
+	}
+	return nil
+}
+
+func (w *consumerWriterImpl) Close() {
+	if !w.closed.CAS(false, true) {
+		return
+	}
+	w.c.Close()
+	w.encdec.Close()
+	close(w.doneCh)
+	w.wg.Wait()
 }

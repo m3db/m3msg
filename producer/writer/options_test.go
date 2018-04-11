@@ -45,21 +45,32 @@ func TestOptions(t *testing.T) {
 	require.Equal(t, defaultPlacementWatchInitTimeout, opts.PlacementWatchInitTimeout())
 	require.Equal(t, time.Second, opts.SetPlacementWatchInitTimeout(time.Second).PlacementWatchInitTimeout())
 
-	require.Equal(t, defaultMessageRetryDelay, opts.MessageRetryBackoff())
+	require.Equal(t, defaultMessageRetryBackoff, opts.MessageRetryBackoff())
 	require.Equal(t, time.Second, opts.SetMessageRetryBackoff(time.Second).MessageRetryBackoff())
 
 	require.Equal(t, defaultCloseCheckInterval, opts.CloseCheckInterval())
 	require.Equal(t, time.Second, opts.SetCloseCheckInterval(time.Second).CloseCheckInterval())
 
-	require.Equal(t, defaultAckErrRetryDelay, opts.AckErrorRetryDelay())
-	require.Equal(t, time.Second, opts.SetAckErrorRetryDelay(time.Second).AckErrorRetryDelay())
+	require.Equal(t, instrument.NewOptions(), opts.InstrumentOptions())
+	require.Nil(t, opts.SetInstrumentOptions(nil).InstrumentOptions())
+}
+
+func TestConnectionOptions(t *testing.T) {
+	opts := NewConnectionOptions()
 
 	require.Equal(t, defaultDialTimeout, opts.DialTimeout())
 	require.Equal(t, time.Second, opts.SetDialTimeout(time.Second).DialTimeout())
 
-	require.Equal(t, retry.NewOptions(), opts.ConnectionRetryOptions())
-	require.Nil(t, opts.SetConnectionRetryOptions(nil).ConnectionRetryOptions())
+	require.Equal(t, defaultConnectionResetDelay, opts.ResetDelay())
+	require.Equal(t, time.Second, opts.SetResetDelay(time.Second).ResetDelay())
 
-	require.Equal(t, instrument.NewOptions(), opts.InstrumentOptions())
-	require.Nil(t, opts.SetInstrumentOptions(nil).InstrumentOptions())
+	require.Equal(t, retry.NewOptions(), opts.RetryOptions())
+	require.Nil(t, opts.SetRetryOptions(nil).RetryOptions())
+
+	require.Equal(t, defaultConnectionBufferSize, opts.WriteBufferSize())
+	require.Equal(t, 1, opts.SetWriteBufferSize(1).WriteBufferSize())
+
+	require.Equal(t, defaultConnectionBufferSize, opts.ReadBufferSize())
+	require.Equal(t, 1, opts.SetReadBufferSize(1).ReadBufferSize())
+
 }

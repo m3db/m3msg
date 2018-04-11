@@ -65,7 +65,7 @@ type connectFn func(addr string) (net.Conn, error)
 type retryableConnection struct {
 	addr            string
 	retrier         retry.Retrier
-	opts            Options
+	opts            ConnectionOptions
 	resetDelayNanos int64
 	logger          log.Logger
 
@@ -89,19 +89,19 @@ type retryableConnection struct {
 // reconnected on errors.
 func newRetryableConnection(
 	addr string,
-	opts Options,
+	opts ConnectionOptions,
 ) *retryableConnection {
 	if opts == nil {
-		opts = NewOptions()
+		opts = NewConnectionOptions()
 	}
 	c := &retryableConnection{
 		addr:            addr,
-		retrier:         retry.NewRetrier(opts.ConnectionRetryOptions().SetForever(defaultRetryForever)),
+		retrier:         retry.NewRetrier(opts.RetryOptions().SetForever(defaultRetryForever)),
 		opts:            opts,
-		resetDelayNanos: int64(opts.ConnectionResetDelay()),
+		resetDelayNanos: int64(opts.ResetDelay()),
 		logger:          opts.InstrumentOptions().Logger(),
-		w:               bufio.NewWriterSize(nil, opts.ConnectionWriteBufferSize()),
-		r:               bufio.NewReaderSize(nil, opts.ConnectionReadBufferSize()),
+		w:               bufio.NewWriterSize(nil, opts.WriteBufferSize()),
+		r:               bufio.NewReaderSize(nil, opts.ReadBufferSize()),
 		lastResetNanos:  0,
 		initialized:     false,
 		closed:          atomic.NewBool(false),
@@ -112,8 +112,8 @@ func newRetryableConnection(
 	}
 
 	c.connectFn = c.connectOnce
-	if err := c.tryResetWithConnectFn(c.connectFn); err != nil {
-		c.SignalReset()
+	if err := c.resetWithConnectFn(c.connectFn); err != nil {
+		c.NotifyReset()
 	}
 	return c
 }
@@ -140,7 +140,7 @@ func (c *retryableConnection) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (c *retryableConnection) SignalReset() {
+func (c *retryableConnection) NotifyReset() {
 	select {
 	case c.resetCh <- struct{}{}:
 	default:
@@ -159,7 +159,7 @@ func (c *retryableConnection) resetConnectionForever() {
 	for {
 		select {
 		case <-c.resetCh:
-			c.tryResetWithConnectFn(c.connectWithRetry)
+			c.resetWithConnectFn(c.connectWithRetry)
 		case <-c.doneCh:
 			if c.conn != nil {
 				c.conn.Close()
@@ -169,7 +169,7 @@ func (c *retryableConnection) resetConnectionForever() {
 	}
 }
 
-func (c *retryableConnection) tryResetWithConnectFn(fn connectFn) error {
+func (c *retryableConnection) resetWithConnectFn(fn connectFn) error {
 	// Avoid resetting too frequent.
 	if c.nowFn().UnixNano() < c.lastResetNanos+c.resetDelayNanos {
 		return nil
@@ -233,24 +233,14 @@ func (c *retryableConnection) reset(conn net.Conn) {
 	c.r.Reset(conn)
 	c.initialized = true
 	c.lastResetNanos = c.nowFn().UnixNano()
-	c.cleanUpResetChannel()
-}
-
-func (c *retryableConnection) cleanUpResetChannel() {
-	for {
-		select {
-		case <-c.resetCh:
-		default:
-			return
-		}
-	}
 }
 
 func (c *retryableConnection) Close() error {
-	if c.closed.CAS(false, true) {
-		close(c.doneCh)
-		c.wg.Wait()
+	if !c.closed.CAS(false, true) {
+		return nil
 	}
+	close(c.doneCh)
+	c.wg.Wait()
 	return nil
 }
 
