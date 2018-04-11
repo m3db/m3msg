@@ -161,9 +161,11 @@ func (c *retryableConnection) resetConnectionForever() {
 		case <-c.resetCh:
 			c.resetWithConnectFn(c.connectWithRetry)
 		case <-c.doneCh:
+			c.connLock.RLock()
 			if c.conn != nil {
 				c.conn.Close()
 			}
+			c.connLock.RUnlock()
 			return
 		}
 	}
