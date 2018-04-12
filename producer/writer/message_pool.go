@@ -20,54 +20,41 @@
 
 package writer
 
-import (
-	"fmt"
-	"sync"
-)
+import "github.com/m3db/m3x/pool"
 
-type ackRouter interface {
-	// Ack acks the metadata.
-	Ack(ack metadata) error
+// messagePool is the pool for message.
+type messagePool interface {
+	// Init initializes the pool.
+	Init()
 
-	// Register registers a message writer.
-	Register(replicatedShardID uint64, mw messageWriter)
+	// Get gets a message from the pool.
+	Get() *message
 
-	// Unregister removes a message writer.
-	Unregister(replicatedShardID uint64)
+	// Put puts a message to the pool.
+	Put(m *message)
 }
 
-type router struct {
-	sync.RWMutex
-
-	mws map[uint64]messageWriter
+type msgPool struct {
+	pool.ObjectPool
 }
 
-func newAckRouter(size int) ackRouter {
-	return &router{
-		mws: make(map[uint64]messageWriter, size),
-	}
+// TODO: Remove the nolint comment after adding usage of this function.
+// nolint: deadcode
+func newMessagePool(opts pool.ObjectPoolOptions) messagePool {
+	p := pool.NewObjectPool(opts)
+	return &msgPool{p}
 }
 
-func (r *router) Ack(meta metadata) error {
-	r.RLock()
-	mw, ok := r.mws[meta.shard]
-	r.RUnlock()
-	if !ok {
-		// Unexpected.
-		return fmt.Errorf("can't find shard %v", meta.shard)
-	}
-	mw.Ack(meta)
-	return nil
+func (p *msgPool) Init() {
+	p.ObjectPool.Init(func() interface{} {
+		return newMessage()
+	})
 }
 
-func (r *router) Register(replicatedShardID uint64, mw messageWriter) {
-	r.Lock()
-	r.mws[replicatedShardID] = mw
-	r.Unlock()
+func (p *msgPool) Get() *message {
+	return p.ObjectPool.Get().(*message)
 }
 
-func (r *router) Unregister(replicatedShardID uint64) {
-	r.Lock()
-	delete(r.mws, replicatedShardID)
-	r.Unlock()
+func (p *msgPool) Put(m *message) {
+	p.ObjectPool.Put(m)
 }

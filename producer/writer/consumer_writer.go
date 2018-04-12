@@ -75,8 +75,6 @@ type consumerWriterImpl struct {
 	m      consumerWriterMetrics
 }
 
-// TODO: Remove the nolint comment after adding usage of this function.
-// nolint: deadcode
 func newConsumerWriter(
 	addr string,
 	router ackRouter,
@@ -171,8 +169,8 @@ func (w *consumerWriterImpl) Close() {
 	if !w.closed.CAS(false, true) {
 		return
 	}
+	close(w.doneCh)
 	w.c.Close()
 	w.encdec.Close()
-	close(w.doneCh)
 	w.wg.Wait()
 }

@@ -34,7 +34,6 @@ import (
 const (
 	defaultDialTimeout               = 10 * time.Second
 	defaultMessageRetryBackoff       = 5 * time.Second
-	defaultPlacementWatchRetryDelay  = 5 * time.Second
 	defaultPlacementWatchInitTimeout = 5 * time.Second
 	defaultTopicWatchInitTimeout     = 5 * time.Second
 	defaultCloseCheckInterval        = 2 * time.Second
@@ -190,11 +189,11 @@ type Options interface {
 	// SetServiceDiscovery sets the client to service discovery services.
 	SetServiceDiscovery(value services.Services) Options
 
-	// PlacementWatchRetryDelay returns the delay before retrying on placement watch errors.
-	PlacementWatchRetryDelay() time.Duration
+	// PlacementWatchRetryOptions returns the retry option on placement watch errors.
+	PlacementWatchRetryOptions() retry.Options
 
-	// SetPlacementWatchRetryDelay sets the delay before retrying on placement watch errors.
-	SetPlacementWatchRetryDelay(value time.Duration) Options
+	// SetPlacementWatchRetryOptions sets the retry option on placement watch errors.
+	SetPlacementWatchRetryOptions(value retry.Options) Options
 
 	// PlacementWatchInitTimeout returns the timeout for placement watch initialization.
 	PlacementWatchInitTimeout() time.Duration
@@ -246,33 +245,34 @@ type Options interface {
 }
 
 type writerOptions struct {
-	topicName                 string
-	topicService              topic.Service
-	topicWatchInitTimeout     time.Duration
-	ackErrRetryOpts           retry.Options
-	messageRetryBackoff       time.Duration
-	messagePoolOptions        pool.ObjectPoolOptions
-	services                  services.Services
-	placementWatchRetryDelay  time.Duration
-	placementWatchInitTimeout time.Duration
-	closeCheckInterval        time.Duration
-	encdecOpts                proto.EncodeDecoderOptions
-	cOpts                     ConnectionOptions
-	iOpts                     instrument.Options
+	topicName                  string
+	topicService               topic.Service
+	topicWatchInitTimeout      time.Duration
+	ackErrRetryOpts            retry.Options
+	messageRetryBackoff        time.Duration
+	messagePoolOptions         pool.ObjectPoolOptions
+	services                   services.Services
+	placementWatchRetryOptions retry.Options
+	placementWatchInitTimeout  time.Duration
+	closeCheckInterval         time.Duration
+	encdecOpts                 proto.EncodeDecoderOptions
+	cOpts                      ConnectionOptions
+	iOpts                      instrument.Options
 }
 
 // NewOptions creates Options.
 func NewOptions() Options {
 	return &writerOptions{
-		ackErrRetryOpts:           retry.NewOptions(),
-		messageRetryBackoff:       defaultMessageRetryBackoff,
-		messagePoolOptions:        pool.NewObjectPoolOptions(),
-		placementWatchRetryDelay:  defaultPlacementWatchRetryDelay,
-		placementWatchInitTimeout: defaultPlacementWatchInitTimeout,
-		topicWatchInitTimeout:     defaultTopicWatchInitTimeout,
-		closeCheckInterval:        defaultCloseCheckInterval,
-		encdecOpts:                proto.NewEncodeDecoderOptions(),
-		iOpts:                     instrument.NewOptions(),
+		topicWatchInitTimeout:      defaultTopicWatchInitTimeout,
+		ackErrRetryOpts:            retry.NewOptions(),
+		messageRetryBackoff:        defaultMessageRetryBackoff,
+		messagePoolOptions:         pool.NewObjectPoolOptions(),
+		placementWatchRetryOptions: retry.NewOptions(),
+		placementWatchInitTimeout:  defaultPlacementWatchInitTimeout,
+		closeCheckInterval:         defaultCloseCheckInterval,
+		encdecOpts:                 proto.NewEncodeDecoderOptions(),
+		cOpts:                      NewConnectionOptions(),
+		iOpts:                      instrument.NewOptions(),
 	}
 }
 
@@ -316,13 +316,13 @@ func (opts *writerOptions) SetServiceDiscovery(value services.Services) Options 
 	return &o
 }
 
-func (opts *writerOptions) PlacementWatchRetryDelay() time.Duration {
-	return opts.placementWatchRetryDelay
+func (opts *writerOptions) PlacementWatchRetryOptions() retry.Options {
+	return opts.placementWatchRetryOptions
 }
 
-func (opts *writerOptions) SetPlacementWatchRetryDelay(value time.Duration) Options {
+func (opts *writerOptions) SetPlacementWatchRetryOptions(value retry.Options) Options {
 	o := *opts
-	o.placementWatchRetryDelay = value
+	o.placementWatchRetryOptions = value
 	return &o
 }
 

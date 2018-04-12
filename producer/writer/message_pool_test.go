@@ -21,53 +21,47 @@
 package writer
 
 import (
-	"fmt"
-	"sync"
+	"testing"
+
+	"github.com/m3db/m3msg/generated/proto/msgpb"
+	"github.com/m3db/m3msg/producer"
+	"github.com/m3db/m3msg/producer/data"
+	"github.com/m3db/m3x/pool"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
 )
 
-type ackRouter interface {
-	// Ack acks the metadata.
-	Ack(ack metadata) error
+func TestMessagePool(t *testing.T) {
+	p := newMessagePool(pool.NewObjectPoolOptions().SetSize(1))
+	p.Init()
 
-	// Register registers a message writer.
-	Register(replicatedShardID uint64, mw messageWriter)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	// Unregister removes a message writer.
-	Unregister(replicatedShardID uint64)
-}
+	md := producer.NewMockData(ctrl)
+	rd := data.NewRefCountedData(md, nil)
+	rd.IncRef()
 
-type router struct {
-	sync.RWMutex
+	m := p.Get()
+	require.Nil(t, m.pb.Value)
+	md.EXPECT().Bytes().Return([]byte("foo"))
+	m.Reset(metadata{}, rd)
+	m.SetRetryNanos(100)
 
-	mws map[uint64]messageWriter
-}
+	pb, ok := m.Marshaler()
+	require.True(t, ok)
+	require.Equal(t, []byte("foo"), pb.(*msgpb.Message).Value)
 
-func newAckRouter(size int) ackRouter {
-	return &router{
-		mws: make(map[uint64]messageWriter, size),
-	}
-}
+	md.EXPECT().Finalize(producer.Consumed)
+	m.Ack()
+	require.True(t, m.IsDroppedOrConsumed())
+	p.Put(m)
 
-func (r *router) Ack(meta metadata) error {
-	r.RLock()
-	mw, ok := r.mws[meta.shard]
-	r.RUnlock()
-	if !ok {
-		// Unexpected.
-		return fmt.Errorf("can't find shard %v", meta.shard)
-	}
-	mw.Ack(meta)
-	return nil
-}
+	m = p.Get()
+	require.True(t, m.IsDroppedOrConsumed())
 
-func (r *router) Register(replicatedShardID uint64, mw messageWriter) {
-	r.Lock()
-	r.mws[replicatedShardID] = mw
-	r.Unlock()
-}
-
-func (r *router) Unregister(replicatedShardID uint64) {
-	r.Lock()
-	delete(r.mws, replicatedShardID)
-	r.Unlock()
+	md.EXPECT().Bytes().Return([]byte("foo"))
+	m.Reset(metadata{}, data.NewRefCountedData(md, nil))
+	require.False(t, m.IsDroppedOrConsumed())
 }
