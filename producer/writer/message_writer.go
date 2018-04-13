@@ -33,8 +33,7 @@ import (
 )
 
 const (
-	defaultAckMapSize       = 1024
-	defaultNumRetryMessages = 1024
+	defaultAckMapSize = 1024
 )
 
 type messageWriter interface {
