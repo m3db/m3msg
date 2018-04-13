@@ -28,9 +28,18 @@ type metadata struct {
 	id    uint64
 }
 
-func newMetadataFromProto(m msgpb.Metadata) metadata {
-	return metadata{
-		shard: m.Shard,
-		id:    m.Id,
-	}
+func (m metadata) ToProto(pb *msgpb.Metadata) {
+	pb.Shard = m.shard
+	pb.Id = m.id
+}
+
+func (m *metadata) FromProto(pb msgpb.Metadata) {
+	m.shard = pb.Shard
+	m.id = pb.Id
+}
+
+func newMetadataFromProto(pb msgpb.Metadata) metadata {
+	var m metadata
+	m.FromProto(pb)
+	return m
 }

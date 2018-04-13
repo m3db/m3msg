@@ -179,8 +179,11 @@ func (w *replicatedShardWriter) UpdateInstances(
 			// Still in the new placement.
 			continue
 		}
+		// Keep the existing message writer and swap the consumer writer in it
+		// with  a new consumer writer in the placement update, so that the
+		// messages buffered in the existing message writer can be tried on
+		// the new consumer writer.
 		if instance, cw, ok := anyKeyValueInMap(toBeAdded); ok {
-			// A new consumer writer could be swaped into the old message writer.
 			mw.AddConsumerWriter(instance.Endpoint(), cw)
 			mw.RemoveConsumerWriter(id)
 			w.updateCutoverCutoffNanos(mw, instance)
@@ -237,15 +240,15 @@ func (w *replicatedShardWriter) updateCutoverCutoffNanos(
 
 func (w *replicatedShardWriter) Close() {
 	w.Lock()
+	defer w.Unlock()
+
 	if w.isClosed {
-		w.Unlock()
 		return
 	}
 	w.isClosed = true
 	for _, mw := range w.messageWriters {
 		mw.Close()
 	}
-	w.Unlock()
 }
 
 func anyKeyValueInMap(

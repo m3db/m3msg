@@ -31,18 +31,18 @@ import (
 type message struct {
 	producer.RefCountedData
 
-	pb         msgpb.Message
-	meta       metadata
-	retryNanos int64
-	retried    int
-	isClosed   *atomic.Bool
+	pb           msgpb.Message
+	meta         metadata
+	retryAtNanos int64
+	retried      int64
+	isAcked      *atomic.Bool
 }
 
 func newMessage() *message {
 	return &message{
-		retryNanos: 0,
-		retried:    0,
-		isClosed:   atomic.NewBool(false),
+		retryAtNanos: 0,
+		retried:      0,
+		isAcked:      atomic.NewBool(false),
 	}
 }
 
@@ -50,49 +50,45 @@ func newMessage() *message {
 func (m *message) Reset(meta metadata, data producer.RefCountedData) {
 	m.meta = meta
 	m.RefCountedData = data
-
-	m.pb.Metadata.Shard = meta.shard
-	m.pb.Metadata.Id = meta.id
-	m.pb.Value = data.Bytes()
-
-	m.retryNanos = 0
+	m.retryAtNanos = 0
 	m.retried = 0
-	m.isClosed.Store(false)
+	m.ToProto(&m.pb)
+	m.isAcked.Store(false)
 }
 
-// RetryNanos returns the timestamp for next retry in nano seconds.
+// RetryAtNanos returns the timestamp for next retry in nano seconds.
 // This is NOT thread safe.
-func (m *message) RetryNanos() int64 {
-	return m.retryNanos
+func (m *message) RetryAtNanos() int64 {
+	return m.retryAtNanos
 }
 
-// SetRetryNanos sets the next retry nanos.
+// SetRetryAtNanos sets the next retry nanos.
 // This is NOT thread safe.
-func (m *message) SetRetryNanos(value int64) {
-	m.retryNanos = value
+func (m *message) SetRetryAtNanos(value int64) {
+	m.retryAtNanos = value
 }
 
-// RetriedTimes returns how many times this message has been retried.
+// WriteTimes returns the times the message has been written.
 // This is NOT thread safe.
-func (m *message) RetriedTimes() int {
+func (m *message) WriteTimes() int64 {
 	return m.retried
 }
 
-// IncRetriedTimes increments the retried times.
+// IncWriteTimes increments the times the message has been written.
 // This is NOT thread safe.
-func (m *message) IncRetriedTimes() {
+func (m *message) IncWriteTimes() {
 	m.retried++
 }
 
-// IsDroppedOrConsumed returns true if the message has been dropped or consumed.
+// IsDroppedOrAcked returns true if the message has been dropped or acked.
 func (m *message) IsDroppedOrAcked() bool {
-	return m.isClosed.Load() || m.RefCountedData.IsDroppedOrConsumed()
+	return m.isAcked.Load() || m.RefCountedData.IsDroppedOrConsumed()
 }
 
 // Ack acknowledges the message. Duplicated acks on the same message might cause panic.
 func (m *message) Ack() {
 	m.RefCountedData.DecRef()
-	m.isClosed.Store(true)
+	m.isAcked.Store(true)
 }
 
 // Metadata returns the metadata.
@@ -103,4 +99,9 @@ func (m *message) Metadata() metadata {
 // Marshaler returns the marshaler and a bool to indicate whether the marshaler is valid.
 func (m *message) Marshaler() (proto.Marshaler, bool) {
 	return &m.pb, !m.RefCountedData.IsDroppedOrConsumed()
+}
+
+func (m *message) ToProto(pb *msgpb.Message) {
+	m.meta.ToProto(&pb.Metadata)
+	pb.Value = m.RefCountedData.Bytes()
 }

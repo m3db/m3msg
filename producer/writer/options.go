@@ -41,6 +41,8 @@ const (
 	// Using 16K which provides much better performance comparing
 	// to lower values like 1k ~ 8k.
 	defaultConnectionBufferSize = 16384
+	// Iterate and remove 64K list item cost about 10ms.
+	defaultMessageRetryBatchSize = 1024 * 64
 )
 
 // ConnectionOptions configs the connections.
@@ -213,6 +215,12 @@ type Options interface {
 	// SetMessageRetryBackoff sets the backoff before retrying messages.
 	SetMessageRetryBackoff(value time.Duration) Options
 
+	// MessageRetryBatchSize returns the size of each retry batch.
+	MessageRetryBatchSize() int
+
+	// SetMessageRetryBatchSize sets the size of each retry batch.
+	SetMessageRetryBatchSize(value int) Options
+
 	// CloseCheckInterval returns the close check interval.
 	CloseCheckInterval() time.Duration
 
@@ -248,13 +256,14 @@ type writerOptions struct {
 	topicName                  string
 	topicService               topic.Service
 	topicWatchInitTimeout      time.Duration
-	ackErrRetryOpts            retry.Options
-	messageRetryBackoff        time.Duration
-	messagePoolOptions         pool.ObjectPoolOptions
 	services                   services.Services
 	placementWatchRetryOptions retry.Options
 	placementWatchInitTimeout  time.Duration
+	messageRetryBackoff        time.Duration
+	messagePoolOptions         pool.ObjectPoolOptions
+	messageRetryBatchSize      int
 	closeCheckInterval         time.Duration
+	ackErrRetryOpts            retry.Options
 	encdecOpts                 proto.EncodeDecoderOptions
 	cOpts                      ConnectionOptions
 	iOpts                      instrument.Options
@@ -264,12 +273,13 @@ type writerOptions struct {
 func NewOptions() Options {
 	return &writerOptions{
 		topicWatchInitTimeout:      defaultTopicWatchInitTimeout,
-		ackErrRetryOpts:            retry.NewOptions(),
-		messageRetryBackoff:        defaultMessageRetryBackoff,
-		messagePoolOptions:         pool.NewObjectPoolOptions(),
 		placementWatchRetryOptions: retry.NewOptions(),
 		placementWatchInitTimeout:  defaultPlacementWatchInitTimeout,
+		messageRetryBackoff:        defaultMessageRetryBackoff,
+		messagePoolOptions:         pool.NewObjectPoolOptions(),
+		messageRetryBatchSize:      defaultMessageRetryBatchSize,
 		closeCheckInterval:         defaultCloseCheckInterval,
+		ackErrRetryOpts:            retry.NewOptions(),
 		encdecOpts:                 proto.NewEncodeDecoderOptions(),
 		cOpts:                      NewConnectionOptions(),
 		iOpts:                      instrument.NewOptions(),
@@ -353,6 +363,16 @@ func (opts *writerOptions) MessageRetryBackoff() time.Duration {
 func (opts *writerOptions) SetMessageRetryBackoff(value time.Duration) Options {
 	o := *opts
 	o.messageRetryBackoff = value
+	return &o
+}
+
+func (opts *writerOptions) MessageRetryBatchSize() int {
+	return opts.messageRetryBatchSize
+}
+
+func (opts *writerOptions) SetMessageRetryBatchSize(value int) Options {
+	o := *opts
+	o.messageRetryBatchSize = value
 	return &o
 }
 

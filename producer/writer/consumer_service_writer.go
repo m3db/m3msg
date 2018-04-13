@@ -72,6 +72,8 @@ type consumerServiceWriterMetrics struct {
 	placementError  tally.Counter
 	placementUpdate tally.Counter
 	invalidShard    tally.Counter
+	filteredPassed  tally.Counter
+	filterNotPassed tally.Counter
 }
 
 func newConsumerServiceWriterMetrics(m tally.Scope) consumerServiceWriterMetrics {
@@ -79,6 +81,8 @@ func newConsumerServiceWriterMetrics(m tally.Scope) consumerServiceWriterMetrics
 		placementUpdate: m.Counter("placement-update"),
 		placementError:  m.Counter("placement-error"),
 		invalidShard:    m.Counter("invalid-shard"),
+		filteredPassed:  m.Counter("filter-passed"),
+		filterNotPassed: m.Counter("filter-not-passed"),
 	}
 }
 
@@ -87,12 +91,12 @@ type processPlacementFn func(p placement.Placement)
 type consumerServiceWriterImpl struct {
 	sync.RWMutex
 
-	cs             topic.ConsumerService
-	numberOfShards uint32
-	ps             placement.Service
-	shardWriters   []shardWriter
-	opts           Options
-	logger         log.Logger
+	cs           topic.ConsumerService
+	numShards    uint32
+	ps           placement.Service
+	shardWriters []shardWriter
+	opts         Options
+	logger       log.Logger
 
 	dataFilter      producer.FilterFunc
 	router          ackRouter
@@ -109,7 +113,7 @@ type consumerServiceWriterImpl struct {
 // nolint: deadcode
 func newConsumerServiceWriter(
 	cs topic.ConsumerService,
-	numberOfShards uint32,
+	numShards uint32,
 	mPool messagePool,
 	opts Options,
 ) (consumerServiceWriter, error) {
@@ -117,12 +121,12 @@ func newConsumerServiceWriter(
 	if err != nil {
 		return nil, err
 	}
-	router := newAckRouter(int(numberOfShards))
+	router := newAckRouter(int(numShards))
 	w := &consumerServiceWriterImpl{
 		cs:              cs,
-		numberOfShards:  numberOfShards,
+		numShards:       numShards,
 		ps:              ps,
-		shardWriters:    initShardWriters(router, cs, numberOfShards, mPool, opts),
+		shardWriters:    initShardWriters(router, cs, numShards, mPool, opts),
 		opts:            opts,
 		logger:          opts.InstrumentOptions().Logger(),
 		dataFilter:      acceptAllFilter,
@@ -157,14 +161,16 @@ func initShardWriters(
 
 func (w *consumerServiceWriterImpl) Write(d producer.RefCountedData) error {
 	shard := d.Shard()
-	if shard >= w.numberOfShards {
+	if shard >= w.numShards {
 		w.m.invalidShard.Inc(1)
-		return fmt.Errorf("could not write data for shard %d which is larger than max shard id %d", shard, w.numberOfShards)
+		return fmt.Errorf("could not write data for shard %d which is larger than max shard id %d", shard, w.numShards)
 	}
-	if d.Filter(w.dataFilter) {
+	if d.Accept(w.dataFilter) {
 		w.shardWriters[shard].Write(d)
+		w.m.filteredPassed.Inc(1)
 	}
 	// It is not an error if the data does not pass the filter.
+	w.m.filterNotPassed.Inc(1)
 	return nil
 }
 
@@ -234,13 +240,15 @@ func (w *consumerServiceWriterImpl) processPlacementWatchUpdate(pw placement.Wat
 }
 
 func (w *consumerServiceWriterImpl) processPlacement(p placement.Placement) {
-	// NB(cw): Lock is not needed as w.consumerWriters is only accessed in this thread.
+	// NB(cw): Lock can be removed as w.consumerWriters is only accessed in this thread.
+	w.Lock()
 	newConsumerWriters, tobeDeleted := w.diffPlacement(p)
 	for i, sw := range w.shardWriters {
 		sw.UpdateInstances(p.InstancesForShard(uint32(i)), newConsumerWriters)
 	}
 	oldConsumerWriters := w.consumerWriters
 	w.consumerWriters = newConsumerWriters
+	w.Unlock()
 	go func() {
 		for _, addr := range tobeDeleted {
 			cw, ok := oldConsumerWriters[addr]

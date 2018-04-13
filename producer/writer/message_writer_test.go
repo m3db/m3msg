@@ -127,13 +127,13 @@ func TestMessageWriterRetry(t *testing.T) {
 	require.False(t, isEmptyWithLock(w.acks))
 
 	msg := w.acks.m[metadata{shard: 200, id: 1}]
-	require.Equal(t, 0, int(msg.RetriedTimes()))
+	require.Equal(t, 1, int(msg.WriteTimes()))
 	w.Init()
 	defer w.Close()
 
 	for {
 		w.RLock()
-		retried := msg.RetriedTimes()
+		retried := msg.WriteTimes()
 		w.RUnlock()
 		if retried != 0 {
 			break
@@ -269,6 +269,55 @@ func TestMessageWriterCutoverCutoff(t *testing.T) {
 	require.True(t, w.isValidWriteWithLock(now.UnixNano()+150))
 	require.False(t, w.isValidWriteWithLock(now.UnixNano()+250))
 	require.False(t, w.isValidWriteWithLock(now.UnixNano()+50))
+	require.Equal(t, 0, w.queue.Len())
+	w.Write(data.NewRefCountedData(nil, nil))
+	require.Equal(t, 0, w.queue.Len())
+}
+
+func TestMessageWriterIteratorBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	opts := testOptions().SetMessageRetryBatchSize(2).SetMessageRetryBackoff(time.Hour)
+	w := newMessageWriter(200, testMessagePool(opts), opts).(*messageWriterImpl)
+
+	md1 := producer.NewMockData(ctrl)
+	md2 := producer.NewMockData(ctrl)
+	md3 := producer.NewMockData(ctrl)
+	rd1 := data.NewRefCountedData(md1, nil)
+	rd2 := data.NewRefCountedData(md2, nil)
+	rd3 := data.NewRefCountedData(md3, nil)
+	md1.EXPECT().Bytes().Return([]byte("1"))
+	md2.EXPECT().Bytes().Return([]byte("2"))
+	md3.EXPECT().Bytes().Return([]byte("3"))
+	w.Write(rd1)
+	w.Write(rd2)
+	w.Write(rd3)
+	e := w.retryBatchWithLock(w.queue.Front(), w.nowFn().UnixNano())
+
+	// Make sure it stopped at rd3.
+	md3.EXPECT().Bytes().Return([]byte("3"))
+	require.Equal(t, []byte("3"), e.Value.(*message).RefCountedData.Bytes())
+	e = w.retryBatchWithLock(e, w.nowFn().UnixNano())
+	require.Nil(t, e)
+}
+
+func TestNextRetryNanos(t *testing.T) {
+	backOffDuration := time.Minute
+	opts := testOptions().SetMessageRetryBackoff(backOffDuration)
+	w := newMessageWriter(200, nil, opts).(*messageWriterImpl)
+
+	nowNanos := time.Now().UnixNano()
+	m := newMessage()
+	m.IncWriteTimes()
+	retryAtNanos := w.nextRetryNanos(m.WriteTimes(), nowNanos)
+	require.True(t, retryAtNanos > nowNanos)
+	require.True(t, retryAtNanos < nowNanos+int64(backOffDuration))
+
+	m.IncWriteTimes()
+	retryAtNanos = w.nextRetryNanos(m.WriteTimes(), nowNanos)
+	require.True(t, retryAtNanos >= nowNanos+int64(backOffDuration))
+	require.True(t, retryAtNanos < nowNanos+2*int64(backOffDuration))
 }
 
 func isEmptyWithLock(h *acks) bool {

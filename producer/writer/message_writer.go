@@ -22,6 +22,7 @@ package writer
 
 import (
 	"container/list"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -32,7 +33,8 @@ import (
 )
 
 const (
-	defaultAckMapSize = 1024
+	defaultAckMapSize       = 1024
+	defaultNumRetryMessages = 1024
 )
 
 type messageWriter interface {
@@ -79,6 +81,7 @@ type messageWriterMetrics struct {
 	writeNew           tally.Counter
 	writeAfterCutoff   tally.Counter
 	writeBeforeCutover tally.Counter
+	retryBatchLatency  tally.Timer
 }
 
 func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
@@ -98,6 +101,7 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 		writeBeforeCutover: scope.
 			Tagged(map[string]string{"reason": "before-cutover"}).
 			Counter("invalid-write"),
+		retryBatchLatency: scope.Timer("retry-batch-latency"),
 	}
 }
 
@@ -107,6 +111,7 @@ type messageWriterImpl struct {
 	replicatedShardID uint64
 	mPool             messagePool
 	opts              Options
+	backOffNanos      int64
 
 	msgID           uint64
 	queue           *list.List
@@ -134,6 +139,7 @@ func newMessageWriter(
 		replicatedShardID: replicatedShardID,
 		mPool:             mPool,
 		opts:              opts,
+		backOffNanos:      int64(opts.MessageRetryBackoff()),
 		msgID:             0,
 		queue:             list.New(),
 		consumerWriters:   make(map[string]consumerWriter),
@@ -186,6 +192,7 @@ func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
 }
 
 func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
+	m.IncWriteTimes()
 	m.IncReads()
 	msg, isValid := m.Marshaler()
 	if !isValid {
@@ -208,12 +215,18 @@ func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
 		// Could not be written to any consumer, will retry later.
 		w.m.writeError.Inc(1)
 	}
-	m.SetRetryNanos(w.nextRetryNanos(m, nowNanos))
+	m.SetRetryAtNanos(w.nextRetryNanos(m.WriteTimes(), nowNanos))
 }
 
 // TODO: make retry time strategy configurable.
-func (w *messageWriterImpl) nextRetryNanos(m *message, nowNanos int64) int64 {
-	return nowNanos + int64(m.RetriedTimes())*int64(w.opts.MessageRetryBackoff())
+func (w *messageWriterImpl) nextRetryNanos(writeTimes int64, nowNanos int64) int64 {
+	half := w.backOffNanos / 2
+	backOff := half + rand.Int63n(half)
+	retryAtNanos := nowNanos + backOff
+	if writeTimes > 1 {
+		retryAtNanos += (writeTimes - 1) * w.backOffNanos
+	}
+	return retryAtNanos
 }
 
 func (w *messageWriterImpl) Ack(meta metadata) {
@@ -230,6 +243,8 @@ func (w *messageWriterImpl) Init() {
 
 func (w *messageWriterImpl) retryUnacknowledgedForever() {
 	ticker := time.NewTicker(w.opts.MessageRetryBackoff())
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -241,28 +256,54 @@ func (w *messageWriterImpl) retryUnacknowledgedForever() {
 }
 
 func (w *messageWriterImpl) retryUnacknowledged() {
-	w.Lock()
-	// TODO(cw): Make this iteration scattered if needed.
-	var next *list.Element
-	for e := w.queue.Front(); e != nil; e = next {
+	w.RLock()
+	e := w.queue.Front()
+	w.RUnlock()
+
+	for e != nil {
+		now := w.nowFn()
+		nowNanos := now.UnixNano()
+		w.Lock()
+		e = w.retryBatchWithLock(e, nowNanos)
+		w.Unlock()
+		w.m.retryBatchLatency.Record(w.nowFn().Sub(now))
+	}
+}
+
+// retryBatchWithLock iterates the message queue with a lock.
+// It returns after visited enough items or the first item
+// to retry so it's more fair with live writes.
+func (w *messageWriterImpl) retryBatchWithLock(
+	start *list.Element,
+	nowNanos int64,
+) *list.Element {
+	var (
+		iterated int
+		next     *list.Element
+	)
+	for e := start; e != nil; e = next {
+		iterated++
+		if iterated > w.opts.MessageRetryBatchSize() {
+			return e
+		}
 		next = e.Next()
 		m := e.Value.(*message)
 		if m.IsDroppedOrAcked() {
-			// Try removing the ack in case the data was dropped rather than consumed.
+			// Try removing the ack in case the data was dropped rather than acked.
 			w.acks.remove(m.Metadata())
 			w.queue.Remove(e)
 			w.mPool.Put(m)
 			continue
 		}
-		nowNanos := w.nowFn().UnixNano()
-		if m.RetryNanos() >= nowNanos {
+		if m.RetryAtNanos() >= nowNanos {
 			continue
 		}
-		m.IncRetriedTimes()
+
 		w.m.writeRetry.Inc(1)
 		w.writeWithLock(m, nowNanos)
+		return next
 	}
-	w.Unlock()
+	return nil
 }
 
 func (w *messageWriterImpl) Close() {
