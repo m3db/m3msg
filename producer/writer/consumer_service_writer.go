@@ -23,8 +23,8 @@ package writer
 import (
 	"fmt"
 	"sync"
-	"time"
 
+	"github.com/m3db/m3cluster/kv/util/runtime"
 	"github.com/m3db/m3cluster/placement"
 	"github.com/m3db/m3cluster/services"
 	"github.com/m3db/m3msg/producer"
@@ -47,11 +47,8 @@ type consumerServiceWriter interface {
 	// Write writes data.
 	Write(d producer.RefCountedData) error
 
-	// Init will initialize the writer with the current placement
-	// and setup the background thread to watch for updates.
-	// It will return error if no placement is available within timeout
-	// for the service but will still watch for future updates.
-	Init() error
+	// Init will initialize the consumer service writer.
+	Init()
 
 	// Close closes the writer and the background watch thread.
 	// It should block until all the data for the given consumer service
@@ -86,8 +83,6 @@ func newConsumerServiceWriterMetrics(m tally.Scope) consumerServiceWriterMetrics
 	}
 }
 
-type processPlacementFn func(p placement.Placement)
-
 type consumerServiceWriterImpl struct {
 	sync.RWMutex
 
@@ -98,15 +93,14 @@ type consumerServiceWriterImpl struct {
 	opts         Options
 	logger       log.Logger
 
+	value           runtime.Value
 	dataFilter      producer.FilterFunc
 	router          ackRouter
 	consumerWriters map[string]consumerWriter
-	isClosed        bool
-	doneCh          chan struct{}
-	wg              sync.WaitGroup
+	closed          bool
 	m               consumerServiceWriterMetrics
 
-	processPlacementFn processPlacementFn
+	processFn runtime.ProcessFn
 }
 
 // TODO: Remove the nolint comment after adding usage of this function.
@@ -132,11 +126,10 @@ func newConsumerServiceWriter(
 		dataFilter:      acceptAllFilter,
 		router:          router,
 		consumerWriters: make(map[string]consumerWriter),
-		isClosed:        false,
-		doneCh:          make(chan struct{}),
+		closed:          false,
 		m:               newConsumerServiceWriterMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
-	w.processPlacementFn = w.processPlacement
+	w.processFn = w.process
 	return w, nil
 }
 
@@ -174,75 +167,53 @@ func (w *consumerServiceWriterImpl) Write(d producer.RefCountedData) error {
 	return nil
 }
 
-func (w *consumerServiceWriterImpl) Init() error {
-	var (
-		pw      placement.Watch
-		err     error
-		retrier = retry.NewRetrier(w.opts.PlacementWatchRetryOptions().SetForever(true))
-	)
-	retrier.Attempt(func() error {
-		pw, err = w.ps.Watch()
+func (w *consumerServiceWriterImpl) Init() {
+	updatableFn := func() (runtime.Updatable, error) {
+		return w.ps.Watch()
+	}
+	getFn := func(updatable runtime.Updatable) (interface{}, error) {
+		update, err := updatable.(placement.Watch).Get()
 		if err != nil {
-			// Unexpected, but if it ever happens, we will retry forever to recreate the watch.
-			w.logger.Errorf(
-				"could not create placement watch for %s, retry later: %v",
-				w.cs.ServiceID().String(),
-				err,
-			)
-			return err
+			w.m.placementError.Inc(1)
+			w.logger.Errorf("invalid placement update from kv, %v", err)
+			return nil, err
 		}
-		return nil
+		w.m.placementUpdate.Inc(1)
+		return update, nil
+	}
+	vOptions := runtime.NewOptions().
+		SetInitWatchTimeout(w.opts.PlacementWatchInitTimeout()).
+		SetInstrumentOptions(w.opts.InstrumentOptions()).
+		SetUpdatableFn(updatableFn).SetGetFn(getFn).SetProcessFn(w.processFn)
+	w.value = runtime.NewValue(vOptions)
+	if err := w.startWatch(); err == nil {
+		return
+	}
+	// Since the consumer service writer could potentially be added during
+	// runtime while producer is already running, in case we failed to get
+	// a placement watch, we will retry forever in the background to establish
+	// the watch.
+	retrier := retry.NewRetrier(w.opts.PlacementWatchRetryOptions().SetForever(true))
+	continueFn := func(int) bool {
+		return !w.isClosed()
+	}
+	go retrier.AttemptWhile(continueFn, func() error {
+		return w.startWatch()
 	})
-	err = w.waitForInitialPlacement(pw)
-
-	w.wg.Add(1)
-	go func() {
-		w.watchPlacementUpdatesForever(pw)
-		w.wg.Done()
-	}()
-	return err
 }
 
-func (w *consumerServiceWriterImpl) waitForInitialPlacement(pw placement.Watch) error {
-	timeout := w.opts.PlacementWatchInitTimeout()
-	select {
-	case <-pw.C():
-		return w.processPlacementWatchUpdate(pw)
-	case <-time.After(timeout):
-		return fmt.Errorf("could not receive initial placement for %s within %v", w.cs.ServiceID().String(), timeout)
-	}
-}
-
-func (w *consumerServiceWriterImpl) watchPlacementUpdatesForever(pw placement.Watch) {
-	for {
-		select {
-		case <-pw.C():
-			w.processPlacementWatchUpdate(pw)
-		case <-w.doneCh:
-			for _, cw := range w.consumerWriters {
-				cw.Close()
-			}
-			return
-		}
-	}
-}
-
-func (w *consumerServiceWriterImpl) processPlacementWatchUpdate(pw placement.Watch) error {
-	p, err := pw.Get()
-	if err != nil {
-		w.m.placementError.Inc(1)
-		w.logger.Errorf("could not process placement update from kv, %v", err)
+func (w *consumerServiceWriterImpl) startWatch() error {
+	err := w.value.Watch()
+	if err != nil && runtime.IsCreateWatchError(err) {
 		return err
 	}
-	w.m.placementUpdate.Inc(1)
-	w.processPlacementFn(p)
 	return nil
 }
-
-func (w *consumerServiceWriterImpl) processPlacement(p placement.Placement) {
+func (w *consumerServiceWriterImpl) process(update interface{}) error {
+	p := update.(placement.Placement)
 	// NB(cw): Lock can be removed as w.consumerWriters is only accessed in this thread.
 	w.Lock()
-	newConsumerWriters, tobeDeleted := w.diffPlacement(p)
+	newConsumerWriters, tobeDeleted := w.diffPlacementWithLock(p)
 	for i, sw := range w.shardWriters {
 		sw.UpdateInstances(p.InstancesForShard(uint32(i)), newConsumerWriters)
 	}
@@ -257,9 +228,10 @@ func (w *consumerServiceWriterImpl) processPlacement(p placement.Placement) {
 			}
 		}
 	}()
+	return nil
 }
 
-func (w *consumerServiceWriterImpl) diffPlacement(newPlacement placement.Placement) (map[string]consumerWriter, []string) {
+func (w *consumerServiceWriterImpl) diffPlacementWithLock(newPlacement placement.Placement) (map[string]consumerWriter, []string) {
 	var (
 		newInstances       = newPlacement.Instances()
 		newConsumerWriters = make(map[string]consumerWriter, len(newInstances))
@@ -287,19 +259,21 @@ func (w *consumerServiceWriterImpl) diffPlacement(newPlacement placement.Placeme
 
 func (w *consumerServiceWriterImpl) Close() {
 	w.Lock()
-	if w.isClosed {
+	if w.closed {
 		w.Unlock()
 		return
 	}
-	w.isClosed = true
+	w.closed = true
 	w.Unlock()
 
 	// Blocks until all messages consuemd.
 	for _, sw := range w.shardWriters {
 		sw.Close()
 	}
-	close(w.doneCh)
-	w.wg.Wait()
+	w.value.Unwatch()
+	for _, cw := range w.consumerWriters {
+		cw.Close()
+	}
 }
 
 func (w *consumerServiceWriterImpl) ServiceID() services.ServiceID {
@@ -316,4 +290,11 @@ func (w *consumerServiceWriterImpl) UnregisterFilter() {
 	w.Lock()
 	w.dataFilter = acceptAllFilter
 	w.Unlock()
+}
+
+func (w *consumerServiceWriterImpl) isClosed() bool {
+	w.RLock()
+	c := w.closed
+	w.RUnlock()
+	return c
 }

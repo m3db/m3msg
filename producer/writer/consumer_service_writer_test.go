@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -65,15 +66,19 @@ func TestConsumerServiceWriterWithSharedConsumer(t *testing.T) {
 		lock               sync.Mutex
 		numConsumerWriters int
 	)
-	csw.processPlacementFn = func(p placement.Placement) {
-		csw.processPlacement(p)
+	csw.processFn = func(p interface{}) error {
+		err := csw.process(p)
 		lock.Lock()
 		numConsumerWriters = len(csw.consumerWriters)
 		lock.Unlock()
+		return err
 	}
 
 	// There will be error, but the watch continues.
-	require.Error(t, csw.Init())
+	csw.Init()
+	lock.Lock()
+	require.Equal(t, 0, numConsumerWriters)
+	lock.Unlock()
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -228,14 +233,14 @@ func TestConsumerServiceWriterWithReplicatedConsumer(t *testing.T) {
 		lock               sync.Mutex
 		numConsumerWriters int
 	)
-	csw.processPlacementFn = func(p placement.Placement) {
-		csw.processPlacement(p)
+	csw.processFn = func(p interface{}) error {
+		err := csw.process(p)
 		lock.Lock()
 		numConsumerWriters = len(csw.consumerWriters)
 		lock.Unlock()
+		return err
 	}
-
-	require.NoError(t, csw.Init())
+	csw.Init()
 
 	for {
 		lock.Lock()
@@ -363,6 +368,46 @@ func TestConsumerServiceWriterFilter(t *testing.T) {
 	csw.UnregisterFilter()
 	sw1.EXPECT().Write(gomock.Any())
 	require.NoError(t, csw.Write(data.NewRefCountedData(md1, nil)))
+}
+
+func TestConsumerServiceWriterInitBackground(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sid := services.NewServiceID().SetName("foo")
+	cs := topic.NewConsumerService().SetServiceID(sid).SetConsumptionType(topic.Shared)
+
+	var (
+		lock   sync.Mutex
+		called int
+	)
+	ps := placement.NewMockService(ctrl)
+	ps.EXPECT().Watch().Do(func() {
+		lock.Lock()
+		called++
+		lock.Unlock()
+	}).Return(nil, errors.New("mock err")).AnyTimes()
+
+	sd := services.NewMockServices(ctrl)
+	sd.EXPECT().PlacementService(sid, gomock.Any()).Return(ps, nil)
+
+	opts := testOptions().SetServiceDiscovery(sd)
+	w, err := newConsumerServiceWriter(cs, 3, testMessagePool(opts), opts)
+	require.NoError(t, err)
+
+	w.Init()
+	defer w.Close()
+	for {
+		lock.Lock()
+		if called > 1 {
+			lock.Unlock()
+			return
+		}
+		lock.Unlock()
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func testPlacementService(store kv.Store, sid services.ServiceID) placement.Service {

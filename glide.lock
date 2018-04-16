@@ -1,5 +1,5 @@
-hash: ab891c8790fe2d4bae0c58f4aaeafad6f6a6ed1f93d92b0c0aeeaf610cd34626
-updated: 2018-04-05T11:46:06.771993-04:00
+hash: 1997ccbe692c3d9ba6263bffcc900cf9241ede71ee0261dd79e2751c56ace3d6
+updated: 2018-04-15T17:53:17.251039-04:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -13,6 +13,10 @@ imports:
   - oleutil
 - name: github.com/gogo/protobuf
   version: 1adfc126b41513cc696b209667c8656ea7aac67c
+  subpackages:
+  - gogoproto
+  - proto
+  - protoc-gen-gogo/descriptor
 - name: github.com/golang/mock
   version: 0d6884b72b943387bb12268d5178dde0e759e49a
   subpackages:
@@ -22,7 +26,7 @@ imports:
   subpackages:
   - proto
 - name: github.com/m3db/m3cluster
-  version: 9d94e172ccd6f4ca7f487506a47f3c85b95f8d6e
+  version: 89652bf6f36b2c64607749536bd3295cdc0213c4
   subpackages:
   - client
   - generated/proto/metadatapb
@@ -44,11 +48,13 @@ imports:
   - checked
   - clock
   - close
+  - errors
   - instrument
   - log
   - pool
   - process
   - resource
+  - retry
   - watch
 - name: github.com/shirou/gopsutil
   version: fc04d2dd9a512906a2604242b35275179e250eda
