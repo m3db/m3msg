@@ -301,7 +301,7 @@ func TestReplicatedShardWriterRemoveMessageWriter(t *testing.T) {
 	// Make sure mw2 is closed and removed from router.
 	for {
 		router.RLock()
-		l := len(router.mws)
+		l := len(router.messageWriters)
 		router.RUnlock()
 		if l == 1 {
 			break

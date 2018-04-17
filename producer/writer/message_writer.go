@@ -191,7 +191,7 @@ func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
 }
 
 func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
-	m.IncWriteTimes()
+	m.IncWriteTimesWithLock()
 	m.IncReads()
 	msg, isValid := m.Marshaler()
 	if !isValid {
@@ -214,7 +214,7 @@ func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
 		// Could not be written to any consumer, will retry later.
 		w.m.writeError.Inc(1)
 	}
-	m.SetRetryAtNanos(w.nextRetryNanos(m.WriteTimes(), nowNanos))
+	m.SetRetryAtNanosWithLock(w.nextRetryNanos(m.WriteTimesWithLock(), nowNanos))
 }
 
 // TODO: make retry time strategy configurable.
@@ -294,7 +294,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			w.mPool.Put(m)
 			continue
 		}
-		if m.RetryAtNanos() >= nowNanos {
+		if m.RetryAtNanosWithLock() >= nowNanos {
 			continue
 		}
 

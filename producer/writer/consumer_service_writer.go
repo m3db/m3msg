@@ -21,6 +21,7 @@
 package writer
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/m3db/m3msg/topic"
 	"github.com/m3db/m3x/log"
 	"github.com/m3db/m3x/retry"
+	"github.com/m3db/m3x/watch"
 
 	"github.com/uber-go/tally"
 )
@@ -41,6 +43,8 @@ var (
 			return true
 		},
 	)
+
+	errUnknownConsumptionType = errors.New("unknown consumption type")
 )
 
 type consumerServiceWriter interface {
@@ -93,14 +97,14 @@ type consumerServiceWriterImpl struct {
 	opts         Options
 	logger       log.Logger
 
-	value           runtime.Value
+	value           watch.Value
 	dataFilter      producer.FilterFunc
 	router          ackRouter
 	consumerWriters map[string]consumerWriter
 	closed          bool
 	m               consumerServiceWriterMetrics
 
-	processFn runtime.ProcessFn
+	processFn watch.ProcessFn
 }
 
 // TODO: Remove the nolint comment after adding usage of this function.
@@ -115,12 +119,16 @@ func newConsumerServiceWriter(
 	if err != nil {
 		return nil, err
 	}
+	ct := cs.ConsumptionType()
+	if ct == topic.Unknown {
+		return nil, errUnknownConsumptionType
+	}
 	router := newAckRouter(int(numShards))
 	w := &consumerServiceWriterImpl{
 		cs:              cs,
 		numShards:       numShards,
 		ps:              ps,
-		shardWriters:    initShardWriters(router, cs, numShards, mPool, opts),
+		shardWriters:    initShardWriters(router, ct, numShards, mPool, opts),
 		opts:            opts,
 		logger:          opts.InstrumentOptions().Logger(),
 		dataFilter:      acceptAllFilter,
@@ -135,14 +143,14 @@ func newConsumerServiceWriter(
 
 func initShardWriters(
 	router ackRouter,
-	cs topic.ConsumerService,
+	ct topic.ConsumptionType,
 	numberOfShards uint32,
 	mPool messagePool,
 	opts Options,
 ) []shardWriter {
 	sws := make([]shardWriter, numberOfShards)
 	for i := range sws {
-		switch cs.ConsumptionType() {
+		switch ct {
 		case topic.Shared:
 			sws[i] = newSharedShardWriter(uint32(i), router, mPool, opts)
 		case topic.Replicated:
@@ -168,10 +176,10 @@ func (w *consumerServiceWriterImpl) Write(d producer.RefCountedData) error {
 }
 
 func (w *consumerServiceWriterImpl) Init() {
-	updatableFn := func() (runtime.Updatable, error) {
+	updatableFn := func() (watch.Updatable, error) {
 		return w.ps.Watch()
 	}
-	getFn := func(updatable runtime.Updatable) (interface{}, error) {
+	getFn := func(updatable watch.Updatable) (interface{}, error) {
 		update, err := updatable.(placement.Watch).Get()
 		if err != nil {
 			w.m.placementError.Inc(1)
@@ -181,11 +189,11 @@ func (w *consumerServiceWriterImpl) Init() {
 		w.m.placementUpdate.Inc(1)
 		return update, nil
 	}
-	vOptions := runtime.NewOptions().
+	vOptions := watch.NewOptions().
 		SetInitWatchTimeout(w.opts.PlacementWatchInitTimeout()).
 		SetInstrumentOptions(w.opts.InstrumentOptions()).
-		SetUpdatableFn(updatableFn).SetGetFn(getFn).SetProcessFn(w.processFn)
-	w.value = runtime.NewValue(vOptions)
+		SetNewUpdatableFn(updatableFn).SetGetUpdateFn(getFn).SetProcessFn(w.processFn)
+	w.value = watch.NewValue(vOptions)
 	if err := w.startWatch(); err == nil {
 		return
 	}

@@ -401,7 +401,7 @@ func TestConsumerServiceWriterInitBackground(t *testing.T) {
 	defer w.Close()
 	for {
 		lock.Lock()
-		if called > 1 {
+		if called >= 1 {
 			lock.Unlock()
 			return
 		}

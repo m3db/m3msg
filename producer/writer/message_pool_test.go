@@ -47,7 +47,7 @@ func TestMessagePool(t *testing.T) {
 	require.Nil(t, m.pb.Value)
 	md.EXPECT().Bytes().Return([]byte("foo"))
 	m.Reset(metadata{}, rd)
-	m.SetRetryAtNanos(100)
+	m.SetRetryAtNanosWithLock(100)
 
 	pb, ok := m.Marshaler()
 	require.True(t, ok)

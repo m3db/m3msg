@@ -39,18 +39,18 @@ type ackRouter interface {
 type router struct {
 	sync.RWMutex
 
-	mws map[uint64]messageWriter
+	messageWriters map[uint64]messageWriter
 }
 
 func newAckRouter(size int) ackRouter {
 	return &router{
-		mws: make(map[uint64]messageWriter, size),
+		messageWriters: make(map[uint64]messageWriter, size),
 	}
 }
 
 func (r *router) Ack(meta metadata) error {
 	r.RLock()
-	mw, ok := r.mws[meta.shard]
+	mw, ok := r.messageWriters[meta.shard]
 	r.RUnlock()
 	if !ok {
 		// Unexpected.
@@ -62,12 +62,12 @@ func (r *router) Ack(meta metadata) error {
 
 func (r *router) Register(replicatedShardID uint64, mw messageWriter) {
 	r.Lock()
-	r.mws[replicatedShardID] = mw
+	r.messageWriters[replicatedShardID] = mw
 	r.Unlock()
 }
 
 func (r *router) Unregister(replicatedShardID uint64) {
 	r.Lock()
-	delete(r.mws, replicatedShardID)
+	delete(r.messageWriters, replicatedShardID)
 	r.Unlock()
 }

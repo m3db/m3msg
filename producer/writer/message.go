@@ -56,27 +56,23 @@ func (m *message) Reset(meta metadata, data producer.RefCountedData) {
 	m.isAcked.Store(false)
 }
 
-// RetryAtNanos returns the timestamp for next retry in nano seconds.
-// This is NOT thread safe.
-func (m *message) RetryAtNanos() int64 {
+// RetryAtNanosWithLock returns the timestamp for next retry in nano seconds.
+func (m *message) RetryAtNanosWithLock() int64 {
 	return m.retryAtNanos
 }
 
-// SetRetryAtNanos sets the next retry nanos.
-// This is NOT thread safe.
-func (m *message) SetRetryAtNanos(value int64) {
+// SetRetryAtNanosWithLock sets the next retry nanos.
+func (m *message) SetRetryAtNanosWithLock(value int64) {
 	m.retryAtNanos = value
 }
 
-// WriteTimes returns the times the message has been written.
-// This is NOT thread safe.
-func (m *message) WriteTimes() int64 {
+// WriteTimesWithLock returns the times the message has been written.
+func (m *message) WriteTimesWithLock() int64 {
 	return m.retried
 }
 
-// IncWriteTimes increments the times the message has been written.
-// This is NOT thread safe.
-func (m *message) IncWriteTimes() {
+// IncWriteTimesWithLock increments the times the message has been written.
+func (m *message) IncWriteTimesWithLock() {
 	m.retried++
 }
 

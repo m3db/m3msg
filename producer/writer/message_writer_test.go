@@ -127,13 +127,13 @@ func TestMessageWriterRetry(t *testing.T) {
 	require.False(t, isEmptyWithLock(w.acks))
 
 	msg := w.acks.m[metadata{shard: 200, id: 1}]
-	require.Equal(t, 1, int(msg.WriteTimes()))
+	require.Equal(t, 1, int(msg.WriteTimesWithLock()))
 	w.Init()
 	defer w.Close()
 
 	for {
 		w.RLock()
-		retried := msg.WriteTimes()
+		retried := msg.WriteTimesWithLock()
 		w.RUnlock()
 		if retried != 0 {
 			break
@@ -309,13 +309,13 @@ func TestNextRetryNanos(t *testing.T) {
 
 	nowNanos := time.Now().UnixNano()
 	m := newMessage()
-	m.IncWriteTimes()
-	retryAtNanos := w.nextRetryNanos(m.WriteTimes(), nowNanos)
+	m.IncWriteTimesWithLock()
+	retryAtNanos := w.nextRetryNanos(m.WriteTimesWithLock(), nowNanos)
 	require.True(t, retryAtNanos > nowNanos)
 	require.True(t, retryAtNanos < nowNanos+int64(backOffDuration))
 
-	m.IncWriteTimes()
-	retryAtNanos = w.nextRetryNanos(m.WriteTimes(), nowNanos)
+	m.IncWriteTimesWithLock()
+	retryAtNanos = w.nextRetryNanos(m.WriteTimesWithLock(), nowNanos)
 	require.True(t, retryAtNanos >= nowNanos+int64(backOffDuration))
 	require.True(t, retryAtNanos < nowNanos+2*int64(backOffDuration))
 }
