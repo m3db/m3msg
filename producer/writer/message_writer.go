@@ -73,21 +73,26 @@ type messageWriter interface {
 }
 
 type messageWriterMetrics struct {
-	consumerWriteError tally.Counter
-	writeError         tally.Counter
-	writeSuccess       tally.Counter
-	writeRetry         tally.Counter
-	writeNew           tally.Counter
-	writeAfterCutoff   tally.Counter
-	writeBeforeCutover tally.Counter
-	retryBatchLatency  tally.Timer
+	writeSuccess           tally.Counter
+	oneConsumerWriteError  tally.Counter
+	allConsumersWriteError tally.Counter
+	writeRetry             tally.Counter
+	writeNew               tally.Counter
+	writeAfterCutoff       tally.Counter
+	writeBeforeCutover     tally.Counter
+	retryBatchLatency      tally.Timer
+	queueSize              tally.Gauge
 }
 
 func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 	return messageWriterMetrics{
-		consumerWriteError: scope.Counter("consumer-write-error"),
-		writeError:         scope.Counter("write-error"),
-		writeSuccess:       scope.Counter("write-success"),
+		writeSuccess: scope.Counter("write-success"),
+		oneConsumerWriteError: scope.
+			Tagged(map[string]string{"error-type": "one-consumer"}).
+			Counter("write-error"),
+		allConsumersWriteError: scope.
+			Tagged(map[string]string{"error-type": "all-consumers"}).
+			Counter("write-error"),
 		writeRetry: scope.
 			Tagged(map[string]string{"write-type": "retry"}).
 			Counter("write"),
@@ -101,6 +106,7 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 			Tagged(map[string]string{"reason": "before-cutover"}).
 			Counter("invalid-write"),
 		retryBatchLatency: scope.Timer("retry-batch-latency"),
+		queueSize:         scope.Gauge("message-queue-size"),
 	}
 }
 
@@ -201,7 +207,7 @@ func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
 	written := false
 	for _, cw := range w.consumerWriters {
 		if err := cw.Write(msg); err != nil {
-			w.m.consumerWriteError.Inc(1)
+			w.m.oneConsumerWriteError.Inc(1)
 			continue
 		}
 		written = true
@@ -212,7 +218,7 @@ func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
 
 	if !written {
 		// Could not be written to any consumer, will retry later.
-		w.m.writeError.Inc(1)
+		w.m.allConsumersWriteError.Inc(1)
 	}
 	m.SetRetryAtNanosWithLock(w.nextRetryNanos(m.WriteTimesWithLock(), nowNanos))
 }
@@ -257,8 +263,9 @@ func (w *messageWriterImpl) retryUnacknowledgedForever() {
 func (w *messageWriterImpl) retryUnacknowledged() {
 	w.RLock()
 	e := w.queue.Front()
+	l := w.queue.Len()
 	w.RUnlock()
-
+	w.m.queueSize.Update(float64(l))
 	for e != nil {
 		now := w.nowFn()
 		nowNanos := now.UnixNano()

@@ -21,7 +21,10 @@
 package writer
 
 import (
+	"fmt"
 	"sync"
+
+	"github.com/uber-go/tally"
 
 	"github.com/m3db/m3cluster/placement"
 	"github.com/m3db/m3msg/producer"
@@ -58,7 +61,9 @@ func newSharedShardWriter(
 	opts Options,
 ) shardWriter {
 	replicatedShardID := uint64(shard)
-	mw := newMessageWriter(replicatedShardID, mPool, opts)
+	iOpts := opts.InstrumentOptions()
+	scope := scopeForMessageWriter(shard, replicatedShardID, iOpts.MetricsScope())
+	mw := newMessageWriter(replicatedShardID, mPool, opts.SetInstrumentOptions(iOpts.SetMetricsScope(scope)))
 	mw.Init()
 	router.Register(replicatedShardID, mw)
 	return &sharedShardWriter{
@@ -194,12 +199,14 @@ func (w *replicatedShardWriter) UpdateInstances(
 		toBeClosed = append(toBeClosed, mw)
 	}
 
+	iOpts := w.opts.InstrumentOptions()
 	// If there are more instances for this shard, this happens when user
 	// increased replication factor for the placement or just this shard.
 	for instance, cw := range toBeAdded {
 		replicatedShardID := uint64(w.replicaID*w.numberOfShards + w.shard)
 		w.replicaID++
-		mw := newMessageWriter(replicatedShardID, w.mPool, w.opts)
+		scope := scopeForMessageWriter(w.shard, replicatedShardID, iOpts.MetricsScope())
+		mw := newMessageWriter(replicatedShardID, w.mPool, w.opts.SetInstrumentOptions(iOpts.SetMetricsScope(scope)))
 		mw.AddConsumerWriter(instance.Endpoint(), cw)
 		w.updateCutoverCutoffNanos(mw, instance)
 		mw.Init()
@@ -258,4 +265,11 @@ func anyKeyValueInMap(
 		return key, value, true
 	}
 	return nil, nil, false
+}
+
+func scopeForMessageWriter(shardID uint32, replicatedShardID uint64, scope tally.Scope) tally.Scope {
+	return scope.Tagged(map[string]string{
+		"shard-id":            fmt.Sprintf("%d", shardID),
+		"replicated-shard-id": fmt.Sprintf("%d", replicatedShardID),
+	})
 }
