@@ -191,12 +191,6 @@ type Options interface {
 	// SetServiceDiscovery sets the client to service discovery services.
 	SetServiceDiscovery(value services.Services) Options
 
-	// PlacementWatchRetryOptions returns the retry option on placement watch errors.
-	PlacementWatchRetryOptions() retry.Options
-
-	// SetPlacementWatchRetryOptions sets the retry option on placement watch errors.
-	SetPlacementWatchRetryOptions(value retry.Options) Options
-
 	// PlacementWatchInitTimeout returns the timeout for placement watch initialization.
 	PlacementWatchInitTimeout() time.Duration
 
@@ -253,36 +247,34 @@ type Options interface {
 }
 
 type writerOptions struct {
-	topicName                  string
-	topicService               topic.Service
-	topicWatchInitTimeout      time.Duration
-	services                   services.Services
-	placementWatchRetryOptions retry.Options
-	placementWatchInitTimeout  time.Duration
-	messageRetryBackoff        time.Duration
-	messagePoolOptions         pool.ObjectPoolOptions
-	messageRetryBatchSize      int
-	closeCheckInterval         time.Duration
-	ackErrRetryOpts            retry.Options
-	encdecOpts                 proto.EncodeDecoderOptions
-	cOpts                      ConnectionOptions
-	iOpts                      instrument.Options
+	topicName                 string
+	topicService              topic.Service
+	topicWatchInitTimeout     time.Duration
+	services                  services.Services
+	placementWatchInitTimeout time.Duration
+	messageRetryBackoff       time.Duration
+	messagePoolOptions        pool.ObjectPoolOptions
+	messageRetryBatchSize     int
+	closeCheckInterval        time.Duration
+	ackErrRetryOpts           retry.Options
+	encdecOpts                proto.EncodeDecoderOptions
+	cOpts                     ConnectionOptions
+	iOpts                     instrument.Options
 }
 
 // NewOptions creates Options.
 func NewOptions() Options {
 	return &writerOptions{
-		topicWatchInitTimeout:      defaultTopicWatchInitTimeout,
-		placementWatchRetryOptions: retry.NewOptions(),
-		placementWatchInitTimeout:  defaultPlacementWatchInitTimeout,
-		messageRetryBackoff:        defaultMessageRetryBackoff,
-		messagePoolOptions:         pool.NewObjectPoolOptions(),
-		messageRetryBatchSize:      defaultMessageRetryBatchSize,
-		closeCheckInterval:         defaultCloseCheckInterval,
-		ackErrRetryOpts:            retry.NewOptions(),
-		encdecOpts:                 proto.NewEncodeDecoderOptions(),
-		cOpts:                      NewConnectionOptions(),
-		iOpts:                      instrument.NewOptions(),
+		topicWatchInitTimeout:     defaultTopicWatchInitTimeout,
+		placementWatchInitTimeout: defaultPlacementWatchInitTimeout,
+		messageRetryBackoff:       defaultMessageRetryBackoff,
+		messagePoolOptions:        pool.NewObjectPoolOptions(),
+		messageRetryBatchSize:     defaultMessageRetryBatchSize,
+		closeCheckInterval:        defaultCloseCheckInterval,
+		ackErrRetryOpts:           retry.NewOptions(),
+		encdecOpts:                proto.NewEncodeDecoderOptions(),
+		cOpts:                     NewConnectionOptions(),
+		iOpts:                     instrument.NewOptions(),
 	}
 }
 
@@ -323,16 +315,6 @@ func (opts *writerOptions) ServiceDiscovery() services.Services {
 func (opts *writerOptions) SetServiceDiscovery(value services.Services) Options {
 	o := *opts
 	o.services = value
-	return &o
-}
-
-func (opts *writerOptions) PlacementWatchRetryOptions() retry.Options {
-	return opts.placementWatchRetryOptions
-}
-
-func (opts *writerOptions) SetPlacementWatchRetryOptions(value retry.Options) Options {
-	o := *opts
-	o.placementWatchRetryOptions = value
 	return &o
 }
 

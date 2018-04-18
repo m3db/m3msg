@@ -25,13 +25,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/m3db/m3cluster/kv/util/runtime"
 	"github.com/m3db/m3cluster/placement"
 	"github.com/m3db/m3cluster/services"
 	"github.com/m3db/m3msg/producer"
 	"github.com/m3db/m3msg/topic"
 	"github.com/m3db/m3x/log"
-	"github.com/m3db/m3x/retry"
 	"github.com/m3db/m3x/watch"
 
 	"github.com/uber-go/tally"
@@ -53,11 +51,12 @@ const (
 	// failOnError will fail the initialization when any error is encountered.
 	failOnError initType = iota
 
-	// retryInBackgroundOnError will handle all the errors encountered during
-	// the initialization and automatically fix them in the background.
-	// This could be used to initialize a new consumer service writer during runtime
-	// so it does not impact other existing consumer service writers.
-	retryInBackgroundOnError
+	// allowInitValueError will not fail the initialization when the initial
+	// value could not be obtained within timeout.
+	// This could be used to initialize a new consumer service writer during
+	// runtime so it allows the consumer service writer to continue waiting
+	// for the placement update in the background.
+	allowInitValueError
 )
 
 type consumerServiceWriter interface {
@@ -213,34 +212,17 @@ func (w *consumerServiceWriterImpl) Init(t initType) error {
 	if err == nil {
 		return nil
 	}
-	if t == failOnError {
+	switch t {
+	case failOnError:
+		return err
+	case allowInitValueError:
+		if _, ok := err.(watch.InitValueError); ok {
+			return nil
+		}
+		return err
+	default:
 		return err
 	}
-	// A watch is already created in the background.
-	if _, ok := err.(watch.CreateWatchError); !ok {
-		return nil
-	}
-	// Since the consumer service writer could potentially be added during
-	// runtime while producer is already running, in case we failed to get
-	// a placement watch, we will retry forever in the background to establish
-	// the watch.
-	retrier := retry.NewRetrier(w.opts.PlacementWatchRetryOptions().SetForever(true))
-	continueFn := func(int) bool {
-		return !w.isClosed()
-	}
-	go retrier.AttemptWhile(continueFn, func() error {
-		return w.startWatch()
-	})
-	return nil
-}
-
-func (w *consumerServiceWriterImpl) startWatch() error {
-	err := w.value.Watch()
-	if err != nil && runtime.IsCreateWatchError(err) {
-		return err
-	}
-	// Watch started.
-	return nil
 }
 
 func (w *consumerServiceWriterImpl) process(update interface{}) error {
@@ -324,11 +306,4 @@ func (w *consumerServiceWriterImpl) UnregisterFilter() {
 	w.Lock()
 	w.dataFilter = acceptAllFilter
 	w.Unlock()
-}
-
-func (w *consumerServiceWriterImpl) isClosed() bool {
-	w.RLock()
-	c := w.closed
-	w.RUnlock()
-	return c
 }

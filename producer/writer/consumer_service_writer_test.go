@@ -75,8 +75,7 @@ func TestConsumerServiceWriterWithSharedConsumer(t *testing.T) {
 		return err
 	}
 
-	// There will be error, but the watch continues.
-	require.NoError(t, csw.Init(retryInBackgroundOnError))
+	require.NoError(t, csw.Init(allowInitValueError))
 	lock.Lock()
 	require.Equal(t, 0, numConsumerWriters)
 	lock.Unlock()
@@ -241,7 +240,7 @@ func TestConsumerServiceWriterWithReplicatedConsumer(t *testing.T) {
 		lock.Unlock()
 		return err
 	}
-	require.NoError(t, csw.Init(retryInBackgroundOnError))
+	require.NoError(t, csw.Init(allowInitValueError))
 
 	for {
 		lock.Lock()
@@ -371,7 +370,7 @@ func TestConsumerServiceWriterFilter(t *testing.T) {
 	require.NoError(t, csw.Write(data.NewRefCountedData(md1, nil)))
 }
 
-func TestConsumerServiceWriterInitRetryInBackground(t *testing.T) {
+func TestConsumerServiceWriterAllowInitValueErrorWithCreateWatchError(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(t)
@@ -380,16 +379,8 @@ func TestConsumerServiceWriterInitRetryInBackground(t *testing.T) {
 	sid := services.NewServiceID().SetName("foo")
 	cs := topic.NewConsumerService().SetServiceID(sid).SetConsumptionType(topic.Shared)
 
-	var (
-		lock   sync.Mutex
-		called int
-	)
 	ps := placement.NewMockService(ctrl)
-	ps.EXPECT().Watch().Do(func() {
-		lock.Lock()
-		called++
-		lock.Unlock()
-	}).Return(nil, errors.New("mock err")).AnyTimes()
+	ps.EXPECT().Watch().Return(nil, errors.New("mock err")).AnyTimes()
 
 	sd := services.NewMockServices(ctrl)
 	sd.EXPECT().PlacementService(sid, gomock.Any()).Return(ps, nil)
@@ -397,21 +388,33 @@ func TestConsumerServiceWriterInitRetryInBackground(t *testing.T) {
 	opts := testOptions().SetServiceDiscovery(sd)
 	w, err := newConsumerServiceWriter(cs, 3, testMessagePool(opts), opts)
 	require.NoError(t, err)
-
-	require.NoError(t, w.Init(retryInBackgroundOnError))
 	defer w.Close()
-	for {
-		lock.Lock()
-		if called >= 1 {
-			lock.Unlock()
-			return
-		}
-		lock.Unlock()
-		time.Sleep(100 * time.Millisecond)
-	}
+
+	require.Error(t, w.Init(allowInitValueError))
 }
 
-func TestConsumerServiceWriterInitFailOnCreateWatchError(t *testing.T) {
+func TestConsumerServiceWriterAllowInitValueErrorWithInitValueError(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sid := services.NewServiceID().SetName("foo")
+	cs := topic.NewConsumerService().SetServiceID(sid).SetConsumptionType(topic.Shared)
+
+	ps := testPlacementService(mem.NewStore(), sid)
+	sd := services.NewMockServices(ctrl)
+	sd.EXPECT().PlacementService(sid, gomock.Any()).Return(ps, nil)
+
+	opts := testOptions().SetServiceDiscovery(sd)
+	w, err := newConsumerServiceWriter(cs, 3, testMessagePool(opts), opts)
+	require.NoError(t, err)
+	defer w.Close()
+
+	require.NoError(t, w.Init(allowInitValueError))
+}
+
+func TestConsumerServiceWriterInitFailOnErrorWithCreateWatchError(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(t)
@@ -437,7 +440,7 @@ func TestConsumerServiceWriterInitFailOnCreateWatchError(t *testing.T) {
 	require.True(t, ok)
 }
 
-func TestConsumerServiceWriterInitFailOnInitValueError(t *testing.T) {
+func TestConsumerServiceWriterInitFailOnErrorWithInitValueError(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(t)

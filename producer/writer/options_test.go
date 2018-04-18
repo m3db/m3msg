@@ -39,9 +39,6 @@ func TestOptions(t *testing.T) {
 	require.Equal(t, defaultTopicWatchInitTimeout, opts.TopicWatchInitTimeout())
 	require.Equal(t, time.Second, opts.SetTopicWatchInitTimeout(time.Second).TopicWatchInitTimeout())
 
-	require.Equal(t, retry.NewOptions(), opts.PlacementWatchRetryOptions())
-	require.Nil(t, opts.SetPlacementWatchRetryOptions(nil).PlacementWatchRetryOptions())
-
 	require.Equal(t, defaultPlacementWatchInitTimeout, opts.PlacementWatchInitTimeout())
 	require.Equal(t, time.Second, opts.SetPlacementWatchInitTimeout(time.Second).PlacementWatchInitTimeout())
 

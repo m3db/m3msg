@@ -219,7 +219,6 @@ func testOptions() Options {
 	return NewOptions().
 		SetTopicName("topicName").
 		SetTopicWatchInitTimeout(100 * time.Millisecond).
-		SetPlacementWatchRetryOptions(retry.NewOptions().SetInitialBackoff(200 * time.Millisecond).SetMaxBackoff(time.Second)).
 		SetPlacementWatchInitTimeout(100 * time.Millisecond).
 		SetMessagePoolOptions(pool.NewObjectPoolOptions().SetSize(1)).
 		SetMessageRetryBackoff(100 * time.Millisecond).
