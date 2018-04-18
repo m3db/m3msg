@@ -47,12 +47,25 @@ var (
 	errUnknownConsumptionType = errors.New("unknown consumption type")
 )
 
+type initType int
+
+const (
+	// failOnError will fail the initialization when any error is encountered.
+	failOnError initType = iota
+
+	// retryInBackgroundOnError will handle all the errors encountered during
+	// the initialization and automatically fix them in the background.
+	// This could be used to initialize a new consumer service writer during runtime
+	// so it does not impact other existing consumer service writers.
+	retryInBackgroundOnError
+)
+
 type consumerServiceWriter interface {
 	// Write writes data.
 	Write(d producer.RefCountedData) error
 
 	// Init will initialize the consumer service writer.
-	Init()
+	Init(initType) error
 
 	// Close closes the writer and the background watch thread.
 	// It should block until all the data for the given consumer service
@@ -175,7 +188,7 @@ func (w *consumerServiceWriterImpl) Write(d producer.RefCountedData) error {
 	return nil
 }
 
-func (w *consumerServiceWriterImpl) Init() {
+func (w *consumerServiceWriterImpl) Init(t initType) error {
 	updatableFn := func() (watch.Updatable, error) {
 		return w.ps.Watch()
 	}
@@ -192,10 +205,20 @@ func (w *consumerServiceWriterImpl) Init() {
 	vOptions := watch.NewOptions().
 		SetInitWatchTimeout(w.opts.PlacementWatchInitTimeout()).
 		SetInstrumentOptions(w.opts.InstrumentOptions()).
-		SetNewUpdatableFn(updatableFn).SetGetUpdateFn(getFn).SetProcessFn(w.processFn)
+		SetNewUpdatableFn(updatableFn).
+		SetGetUpdateFn(getFn).
+		SetProcessFn(w.processFn)
 	w.value = watch.NewValue(vOptions)
-	if err := w.startWatch(); err == nil {
-		return
+	err := w.value.Watch()
+	if err == nil {
+		return nil
+	}
+	if t == failOnError {
+		return err
+	}
+	// A watch is already created in the background,
+	if _, ok := err.(watch.CreateWatchError); !ok {
+		return nil
 	}
 	// Since the consumer service writer could potentially be added during
 	// runtime while producer is already running, in case we failed to get
@@ -208,6 +231,7 @@ func (w *consumerServiceWriterImpl) Init() {
 	go retrier.AttemptWhile(continueFn, func() error {
 		return w.startWatch()
 	})
+	return nil
 }
 
 func (w *consumerServiceWriterImpl) startWatch() error {
@@ -215,6 +239,7 @@ func (w *consumerServiceWriterImpl) startWatch() error {
 	if err != nil && runtime.IsCreateWatchError(err) {
 		return err
 	}
+	// Watch started.
 	return nil
 }
 
