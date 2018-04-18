@@ -1,5 +1,5 @@
-hash: ad10e13967184e6124a6b076078ac00805860a65c06a985a175183a6088273e1
-updated: 2018-04-17T17:49:46.074713-04:00
+hash: b55f48c0e2358de5b4595e302aa6576bcee7b170d92c806464bc04f1bc785f78
+updated: 2018-04-18T15:12:24.173677-04:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -22,7 +22,7 @@ imports:
   subpackages:
   - proto
 - name: github.com/m3db/m3cluster
-  version: 89652bf6f36b2c64607749536bd3295cdc0213c4
+  version: cb17a54d6902c03790286942bafa04a188d4eeb8
   subpackages:
   - client
   - generated/proto/metadatapb
@@ -39,7 +39,7 @@ imports:
   - services/leader/campaign
   - shard
 - name: github.com/m3db/m3x
-  version: a35dcd8fbd6f764e0579f6e1fad598e4fbffcb13
+  version: 29bc232d9ad2e6c4a1804ccce095bb730fb1c6bc
   subpackages:
   - checked
   - clock
