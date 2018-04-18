@@ -24,12 +24,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/uber-go/tally"
-
 	"github.com/m3db/m3cluster/placement"
 	"github.com/m3db/m3msg/producer"
 	"github.com/m3db/m3x/log"
 
+	"github.com/uber-go/tally"
 	"go.uber.org/atomic"
 )
 

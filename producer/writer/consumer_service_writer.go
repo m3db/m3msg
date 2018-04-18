@@ -70,20 +70,20 @@ type consumerServiceWriter interface {
 }
 
 type consumerServiceWriterMetrics struct {
-	placementError  tally.Counter
-	placementUpdate tally.Counter
-	invalidShard    tally.Counter
-	filteredPassed  tally.Counter
-	filterNotPassed tally.Counter
+	placementError    tally.Counter
+	placementUpdate   tally.Counter
+	invalidShard      tally.Counter
+	filteredAccepted  tally.Counter
+	filterNotAccepted tally.Counter
 }
 
 func newConsumerServiceWriterMetrics(m tally.Scope) consumerServiceWriterMetrics {
 	return consumerServiceWriterMetrics{
-		placementUpdate: m.Counter("placement-update"),
-		placementError:  m.Counter("placement-error"),
-		invalidShard:    m.Counter("invalid-shard"),
-		filteredPassed:  m.Counter("filter-passed"),
-		filterNotPassed: m.Counter("filter-not-passed"),
+		placementUpdate:   m.Counter("placement-update"),
+		placementError:    m.Counter("placement-error"),
+		invalidShard:      m.Counter("invalid-shard"),
+		filteredAccepted:  m.Counter("filter-accepted"),
+		filterNotAccepted: m.Counter("filter-not-accepted"),
 	}
 }
 
@@ -168,10 +168,10 @@ func (w *consumerServiceWriterImpl) Write(d producer.RefCountedData) error {
 	}
 	if d.Accept(w.dataFilter) {
 		w.shardWriters[shard].Write(d)
-		w.m.filteredPassed.Inc(1)
+		w.m.filteredAccepted.Inc(1)
 	}
 	// It is not an error if the data does not pass the filter.
-	w.m.filterNotPassed.Inc(1)
+	w.m.filterNotAccepted.Inc(1)
 	return nil
 }
 
@@ -217,6 +217,7 @@ func (w *consumerServiceWriterImpl) startWatch() error {
 	}
 	return nil
 }
+
 func (w *consumerServiceWriterImpl) process(update interface{}) error {
 	p := update.(placement.Placement)
 	// NB(cw): Lock can be removed as w.consumerWriters is only accessed in this thread.

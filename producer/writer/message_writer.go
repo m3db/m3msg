@@ -80,6 +80,7 @@ type messageWriterMetrics struct {
 	writeNew               tally.Counter
 	writeAfterCutoff       tally.Counter
 	writeBeforeCutover     tally.Counter
+	writeLatency           tally.Timer
 	retryBatchLatency      tally.Timer
 	queueSize              tally.Gauge
 }
@@ -106,6 +107,7 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 			Tagged(map[string]string{"reason": "before-cutover"}).
 			Counter("invalid-write"),
 		retryBatchLatency: scope.Timer("retry-batch-latency"),
+		writeLatency:      scope.Timer("write-latency"),
 		queueSize:         scope.Gauge("message-queue-size"),
 	}
 }
@@ -159,7 +161,8 @@ func newMessageWriter(
 }
 
 func (w *messageWriterImpl) Write(rd producer.RefCountedData) {
-	nowNanos := w.nowFn().UnixNano()
+	now := w.nowFn()
+	nowNanos := now.UnixNano()
 	w.RLock()
 	isValid := w.isValidWriteWithLock(nowNanos)
 	w.RUnlock()
@@ -182,6 +185,7 @@ func (w *messageWriterImpl) Write(rd producer.RefCountedData) {
 	w.Unlock()
 
 	w.m.writeNew.Inc(1)
+	w.m.writeLatency.Record(w.nowFn().Sub(now))
 }
 
 func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
@@ -278,7 +282,9 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 
 // retryBatchWithLock iterates the message queue with a lock.
 // It returns after visited enough items or the first item
-// to retry so it's more fair with live writes.
+// to retry so it holds the lock for less time and allows new writes
+// to be less blocked, so that one slow message writer does not
+// slow down other message writers too much.
 func (w *messageWriterImpl) retryBatchWithLock(
 	start *list.Element,
 	nowNanos int64,
