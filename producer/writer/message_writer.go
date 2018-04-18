@@ -126,6 +126,7 @@ type messageWriterImpl struct {
 	acks            *acks
 	cutOffNanos     int64
 	cutOverNanos    int64
+	toBeRetried     []*message
 	isClosed        bool
 	doneCh          chan struct{}
 	wg              sync.WaitGroup
@@ -153,6 +154,7 @@ func newMessageWriter(
 		acks:              newAckHelper(defaultAckMapSize),
 		cutOffNanos:       0,
 		cutOverNanos:      0,
+		toBeRetried:       make([]*message, 0, opts.MessageRetryWriteBatchSize()),
 		isClosed:          false,
 		doneCh:            make(chan struct{}),
 		m:                 newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope()),
@@ -290,13 +292,14 @@ func (w *messageWriterImpl) retryBatchWithLock(
 	nowNanos int64,
 ) *list.Element {
 	var (
-		iterated int
-		next     *list.Element
+		iterated   int
+		next       *list.Element
+		retryFound int
 	)
 	for e := start; e != nil; e = next {
 		iterated++
-		if iterated > w.opts.MessageRetryBatchSize() {
-			return e
+		if iterated > w.opts.MessageRetryIterateBatchSize() {
+			break
 		}
 		next = e.Next()
 		m := e.Value.(*message)
@@ -312,10 +315,17 @@ func (w *messageWriterImpl) retryBatchWithLock(
 		}
 
 		w.m.writeRetry.Inc(1)
-		w.writeWithLock(m, nowNanos)
-		return next
+		w.toBeRetried = append(w.toBeRetried, m)
+		retryFound++
+		if retryFound >= w.opts.MessageRetryWriteBatchSize() {
+			break
+		}
 	}
-	return nil
+	for _, m := range w.toBeRetried {
+		w.writeWithLock(m, nowNanos)
+	}
+	w.toBeRetried = w.toBeRetried[:0]
+	return next
 }
 
 func (w *messageWriterImpl) Close() {

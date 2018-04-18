@@ -274,11 +274,40 @@ func TestMessageWriterCutoverCutoff(t *testing.T) {
 	require.Equal(t, 0, w.queue.Len())
 }
 
-func TestMessageWriterIteratorBatch(t *testing.T) {
+func TestMessageWriterRetryIterateBatch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	opts := testOptions().SetMessageRetryBatchSize(2).SetMessageRetryBackoff(time.Hour)
+	opts := testOptions().SetMessageRetryIterateBatchSize(2).SetMessageRetryBackoff(time.Hour)
+	w := newMessageWriter(200, testMessagePool(opts), opts).(*messageWriterImpl)
+
+	md1 := producer.NewMockData(ctrl)
+	md2 := producer.NewMockData(ctrl)
+	md3 := producer.NewMockData(ctrl)
+	rd1 := data.NewRefCountedData(md1, nil)
+	rd2 := data.NewRefCountedData(md2, nil)
+	rd3 := data.NewRefCountedData(md3, nil)
+	md1.EXPECT().Bytes().Return([]byte("1"))
+	md2.EXPECT().Bytes().Return([]byte("2"))
+	md3.EXPECT().Bytes().Return([]byte("3"))
+	w.Write(rd1)
+	w.Write(rd2)
+	w.Write(rd3)
+	e := w.retryBatchWithLock(w.queue.Front(), w.nowFn().UnixNano())
+	require.Empty(t, w.toBeRetried)
+
+	// Make sure it stopped at rd3.
+	md3.EXPECT().Bytes().Return([]byte("3"))
+	require.Equal(t, []byte("3"), e.Value.(*message).RefCountedData.Bytes())
+	e = w.retryBatchWithLock(e, w.nowFn().UnixNano())
+	require.Nil(t, e)
+}
+
+func TestMessageWriterRetryWriteBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	opts := testOptions().SetMessageRetryWriteBatchSize(2).SetMessageRetryBackoff(2 * time.Nanosecond)
 	w := newMessageWriter(200, testMessagePool(opts), opts).(*messageWriterImpl)
 
 	md1 := producer.NewMockData(ctrl)
