@@ -216,7 +216,7 @@ func (w *consumerServiceWriterImpl) Init(t initType) error {
 	if t == failOnError {
 		return err
 	}
-	// A watch is already created in the background,
+	// A watch is already created in the background.
 	if _, ok := err.(watch.CreateWatchError); !ok {
 		return nil
 	}
