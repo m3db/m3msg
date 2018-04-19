@@ -32,15 +32,14 @@ import (
 )
 
 const (
-	defaultDialTimeout                = 10 * time.Second
-	defaultMessageRetryBackoff        = 5 * time.Second
-	defaultPlacementWatchInitTimeout  = 5 * time.Second
-	defaultTopicWatchInitTimeout      = 5 * time.Second
-	defaultCloseCheckInterval         = 2 * time.Second
-	defaultConnectionResetDelay       = 2 * time.Second
-	defaultMessageRetryWriteBatchSize = 64
+	defaultDialTimeout               = 10 * time.Second
+	defaultMessageRetryBackoff       = 5 * time.Second
+	defaultPlacementWatchInitTimeout = 5 * time.Second
+	defaultTopicWatchInitTimeout     = 5 * time.Second
+	defaultCloseCheckInterval        = 2 * time.Second
+	defaultConnectionResetDelay      = 2 * time.Second
 	// Iterate and remove 1M list item cost about 160ms.
-	defaultMessageRetryIterateBatchSize = 1024 * 1024
+	defaultMessageRetryBatchSize = 1024 * 1024
 	// Using 16K which provides much better performance comparing
 	// to lower values like 1k ~ 8k.
 	defaultConnectionBufferSize = 16384
@@ -210,17 +209,11 @@ type Options interface {
 	// SetMessageRetryBackoff sets the backoff before retrying messages.
 	SetMessageRetryBackoff(value time.Duration) Options
 
-	// MessageRetryIterateBatchSize returns the iterate batch size in retry.
-	MessageRetryIterateBatchSize() int
+	// MessageRetryBatchSize returns the batch size for retry.
+	MessageRetryBatchSize() int
 
-	// SetMessageRetryIterateBatchSize sets the iterate batch size in retry.
-	SetMessageRetryIterateBatchSize(value int) Options
-
-	// MessageRetryWriteBatchSize returns the write batch size in retry.
-	MessageRetryWriteBatchSize() int
-
-	// SetMessageRetryWriteBatchSize sets the write batch size in retry.
-	SetMessageRetryWriteBatchSize(value int) Options
+	// SetMessageRetryBatchSize sets the batch size for retry.
+	SetMessageRetryBatchSize(value int) Options
 
 	// CloseCheckInterval returns the close check interval.
 	CloseCheckInterval() time.Duration
@@ -254,36 +247,34 @@ type Options interface {
 }
 
 type writerOptions struct {
-	topicName                    string
-	topicService                 topic.Service
-	topicWatchInitTimeout        time.Duration
-	services                     services.Services
-	placementWatchInitTimeout    time.Duration
-	messageRetryBackoff          time.Duration
-	messagePoolOptions           pool.ObjectPoolOptions
-	messageRetryIterateBatchSize int
-	messageRetryWriteBatchSize   int
-	closeCheckInterval           time.Duration
-	ackErrRetryOpts              retry.Options
-	encdecOpts                   proto.EncodeDecoderOptions
-	cOpts                        ConnectionOptions
-	iOpts                        instrument.Options
+	topicName                 string
+	topicService              topic.Service
+	topicWatchInitTimeout     time.Duration
+	services                  services.Services
+	placementWatchInitTimeout time.Duration
+	messageRetryBackoff       time.Duration
+	messagePoolOptions        pool.ObjectPoolOptions
+	messageRetryBatchSize     int
+	closeCheckInterval        time.Duration
+	ackErrRetryOpts           retry.Options
+	encdecOpts                proto.EncodeDecoderOptions
+	cOpts                     ConnectionOptions
+	iOpts                     instrument.Options
 }
 
 // NewOptions creates Options.
 func NewOptions() Options {
 	return &writerOptions{
-		topicWatchInitTimeout:        defaultTopicWatchInitTimeout,
-		placementWatchInitTimeout:    defaultPlacementWatchInitTimeout,
-		messageRetryBackoff:          defaultMessageRetryBackoff,
-		messagePoolOptions:           pool.NewObjectPoolOptions(),
-		messageRetryIterateBatchSize: defaultMessageRetryIterateBatchSize,
-		messageRetryWriteBatchSize:   defaultMessageRetryWriteBatchSize,
-		closeCheckInterval:           defaultCloseCheckInterval,
-		ackErrRetryOpts:              retry.NewOptions(),
-		encdecOpts:                   proto.NewEncodeDecoderOptions(),
-		cOpts:                        NewConnectionOptions(),
-		iOpts:                        instrument.NewOptions(),
+		topicWatchInitTimeout:     defaultTopicWatchInitTimeout,
+		placementWatchInitTimeout: defaultPlacementWatchInitTimeout,
+		messageRetryBackoff:       defaultMessageRetryBackoff,
+		messagePoolOptions:        pool.NewObjectPoolOptions(),
+		messageRetryBatchSize:     defaultMessageRetryBatchSize,
+		closeCheckInterval:        defaultCloseCheckInterval,
+		ackErrRetryOpts:           retry.NewOptions(),
+		encdecOpts:                proto.NewEncodeDecoderOptions(),
+		cOpts:                     NewConnectionOptions(),
+		iOpts:                     instrument.NewOptions(),
 	}
 }
 
@@ -357,23 +348,13 @@ func (opts *writerOptions) SetMessageRetryBackoff(value time.Duration) Options {
 	return &o
 }
 
-func (opts *writerOptions) MessageRetryIterateBatchSize() int {
-	return opts.messageRetryIterateBatchSize
+func (opts *writerOptions) MessageRetryBatchSize() int {
+	return opts.messageRetryBatchSize
 }
 
-func (opts *writerOptions) SetMessageRetryIterateBatchSize(value int) Options {
+func (opts *writerOptions) SetMessageRetryBatchSize(value int) Options {
 	o := *opts
-	o.messageRetryIterateBatchSize = value
-	return &o
-}
-
-func (opts *writerOptions) MessageRetryWriteBatchSize() int {
-	return opts.messageRetryWriteBatchSize
-}
-
-func (opts *writerOptions) SetMessageRetryWriteBatchSize(value int) Options {
-	o := *opts
-	o.messageRetryWriteBatchSize = value
+	o.messageRetryBatchSize = value
 	return &o
 }
 

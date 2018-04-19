@@ -33,7 +33,8 @@ import (
 )
 
 const (
-	defaultAckMapSize = 1024
+	defaultAckMapSize      = 1024
+	defaultToBeRetriedSize = 1024
 )
 
 type messageWriter interface {
@@ -154,7 +155,7 @@ func newMessageWriter(
 		acks:              newAckHelper(defaultAckMapSize),
 		cutOffNanos:       0,
 		cutOverNanos:      0,
-		toBeRetried:       make([]*message, 0, opts.MessageRetryWriteBatchSize()),
+		toBeRetried:       make([]*message, 0, defaultToBeRetriedSize),
 		isClosed:          false,
 		doneCh:            make(chan struct{}),
 		m:                 newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope()),
@@ -182,10 +183,10 @@ func (w *messageWriterImpl) Write(rd producer.RefCountedData) {
 	}
 	msg.Reset(meta, rd)
 	w.acks.add(meta, msg)
-	w.writeWithLock(msg, nowNanos)
 	w.queue.PushBack(msg)
+	consumerWriters := w.consumerWriters
 	w.Unlock()
-
+	w.write(consumerWriters, msg, nowNanos)
 	w.m.writeNew.Inc(1)
 	w.m.writeLatency.Record(w.nowFn().Sub(now))
 }
@@ -202,8 +203,12 @@ func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
 	return true
 }
 
-func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
-	m.IncWriteTimesWithLock()
+func (w *messageWriterImpl) write(
+	consumerWriters map[string]consumerWriter,
+	m *message,
+	nowNanos int64,
+) {
+	m.IncWriteTimes()
 	m.IncReads()
 	msg, isValid := m.Marshaler()
 	if !isValid {
@@ -211,7 +216,7 @@ func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
 		return
 	}
 	written := false
-	for _, cw := range w.consumerWriters {
+	for _, cw := range consumerWriters {
 		if err := cw.Write(msg); err != nil {
 			w.m.oneConsumerWriteError.Inc(1)
 			continue
@@ -226,7 +231,7 @@ func (w *messageWriterImpl) writeWithLock(m *message, nowNanos int64) {
 		// Could not be written to any consumer, will retry later.
 		w.m.allConsumersWriteError.Inc(1)
 	}
-	m.SetRetryAtNanosWithLock(w.nextRetryNanos(m.WriteTimesWithLock(), nowNanos))
+	m.SetRetryAtNanos(w.nextRetryNanos(m.WriteTimes(), nowNanos))
 }
 
 // TODO: make retry time strategy configurable.
@@ -268,16 +273,24 @@ func (w *messageWriterImpl) retryUnacknowledgedForever() {
 
 func (w *messageWriterImpl) retryUnacknowledged() {
 	w.RLock()
-	e := w.queue.Front()
-	l := w.queue.Len()
+	var (
+		l           = w.queue.Len()
+		e           = w.queue.Front()
+		toBeRetried []*message
+	)
 	w.RUnlock()
 	w.m.queueSize.Update(float64(l))
 	for e != nil {
 		now := w.nowFn()
 		nowNanos := now.UnixNano()
 		w.Lock()
-		e = w.retryBatchWithLock(e, nowNanos)
+		e, toBeRetried = w.retryBatchWithLock(e, nowNanos)
+		consumerWriters := w.consumerWriters
 		w.Unlock()
+		for _, m := range toBeRetried {
+			w.write(consumerWriters, m, w.nowFn().UnixNano())
+			w.m.writeRetry.Inc(1)
+		}
 		w.m.retryBatchLatency.Record(w.nowFn().Sub(now))
 	}
 }
@@ -290,15 +303,15 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 func (w *messageWriterImpl) retryBatchWithLock(
 	start *list.Element,
 	nowNanos int64,
-) *list.Element {
+) (*list.Element, []*message) {
 	var (
-		iterated   int
-		next       *list.Element
-		retryFound int
+		iterated int
+		next     *list.Element
 	)
+	w.toBeRetried = w.toBeRetried[:0]
 	for e := start; e != nil; e = next {
 		iterated++
-		if iterated > w.opts.MessageRetryIterateBatchSize() {
+		if iterated > w.opts.MessageRetryBatchSize() {
 			break
 		}
 		next = e.Next()
@@ -310,22 +323,12 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			w.mPool.Put(m)
 			continue
 		}
-		if m.RetryAtNanosWithLock() >= nowNanos {
+		if m.RetryAtNanos() >= nowNanos {
 			continue
 		}
-
-		w.m.writeRetry.Inc(1)
 		w.toBeRetried = append(w.toBeRetried, m)
-		retryFound++
-		if retryFound >= w.opts.MessageRetryWriteBatchSize() {
-			break
-		}
 	}
-	for _, m := range w.toBeRetried {
-		w.writeWithLock(m, nowNanos)
-	}
-	w.toBeRetried = w.toBeRetried[:0]
-	return next
+	return next, w.toBeRetried
 }
 
 func (w *messageWriterImpl) Close() {
