@@ -252,12 +252,12 @@ func (w *messageWriterImpl) Ack(meta metadata) {
 func (w *messageWriterImpl) Init() {
 	w.wg.Add(1)
 	go func() {
-		w.retryUnacknowledgedForever()
+		w.retryUnacknowledgedUntilClose()
 		w.wg.Done()
 	}()
 }
 
-func (w *messageWriterImpl) retryUnacknowledgedForever() {
+func (w *messageWriterImpl) retryUnacknowledgedUntilClose() {
 	ticker := time.NewTicker(w.opts.MessageRetryBackoff())
 	defer ticker.Stop()
 

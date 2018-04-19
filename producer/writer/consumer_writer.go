@@ -116,12 +116,12 @@ func (w *consumerWriterImpl) Init() {
 
 	w.wg.Add(1)
 	go func() {
-		w.readAcksForever()
+		w.readAcksUntilClose()
 		w.wg.Done()
 	}()
 }
 
-func (w *consumerWriterImpl) readAcksForever() {
+func (w *consumerWriterImpl) readAcksUntilClose() {
 	for {
 		select {
 		case <-w.doneCh:

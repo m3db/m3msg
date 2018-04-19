@@ -150,12 +150,12 @@ func (b *buffer) dropEarliestUntilTargetWithLock(targetSize uint64) {
 func (b *buffer) Init() {
 	b.wg.Add(1)
 	go func() {
-		b.cleanupForever()
+		b.cleanupUntilClose()
 		b.wg.Done()
 	}()
 }
 
-func (b *buffer) cleanupForever() {
+func (b *buffer) cleanupUntilClose() {
 	ticker := time.NewTicker(b.opts.CleanupInterval())
 	defer ticker.Stop()
 
