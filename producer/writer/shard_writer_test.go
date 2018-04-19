@@ -170,6 +170,7 @@ func TestReplicatedShardWriter(t *testing.T) {
 		[]placement.Instance{i1, i3},
 		cws,
 	)
+	require.Equal(t, 2, len(sw.messageWriters))
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -178,8 +179,6 @@ func TestReplicatedShardWriter(t *testing.T) {
 	md.EXPECT().Bytes().Return([]byte("foo")).Times(2)
 
 	sw.Write(data.NewRefCountedData(md, nil))
-
-	require.Equal(t, 2, len(sw.messageWriters))
 
 	mw1 := sw.messageWriters[i1.Endpoint()].(*messageWriterImpl)
 	for {
