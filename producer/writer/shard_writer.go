@@ -166,7 +166,6 @@ func (w *replicatedShardWriter) UpdateInstances(
 		toBeAdded         = make(map[placement.Instance]consumerWriter, len(instances))
 		oldMessageWriters = w.messageWriters
 	)
-
 	for _, instance := range instances {
 		id := instance.Endpoint()
 		if mw, ok := oldMessageWriters[id]; ok {
