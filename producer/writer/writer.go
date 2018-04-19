@@ -73,11 +73,13 @@ type writer struct {
 	filterRegistry         map[string]producer.FilterFunc
 	isClosed               bool
 	m                      writerMetrics
+
+	processFn watch.ProcessFn
 }
 
 // NewWriter creates a new writer.
 func NewWriter(opts Options) producer.Writer {
-	return &writer{
+	w := &writer{
 		topic:                  opts.TopicName(),
 		ts:                     opts.TopicService(),
 		mPool:                  newMessagePool(opts.MessagePoolOptions()),
@@ -89,6 +91,8 @@ func NewWriter(opts Options) producer.Writer {
 		isClosed:               false,
 		m:                      newWriterMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
+	w.processFn = w.process
+	return w
 }
 
 func (w *writer) Write(d producer.RefCountedData) error {
@@ -97,8 +101,8 @@ func (w *writer) Write(d producer.RefCountedData) error {
 	m := w.consumerServiceWriters
 	numShards := w.numShards
 	w.RUnlock()
-
 	if isClosed {
+		d.Drop()
 		return errWriterClosed
 	}
 	shard := d.Shard()
@@ -135,21 +139,22 @@ func (w *writer) Init() error {
 		SetInstrumentOptions(w.opts.InstrumentOptions()).
 		SetNewUpdatableFn(newUpdatableFn).
 		SetGetUpdateFn(getUpdateFn).
-		SetProcessFn(w.process)
+		SetProcessFn(w.processFn)
 	w.value = watch.NewValue(vOptions)
 	return w.value.Watch()
 }
 
 func (w *writer) process(update interface{}) error {
-	return w.processTopic(update.(topic.Topic))
-}
-
-func (w *writer) processTopic(t topic.Topic) error {
+	t := update.(topic.Topic)
+	if w.numShards != 0 && w.numShards != t.NumberOfShards() {
+		w.m.topicUpdateError.Inc(1)
+		return fmt.Errorf("invalid topic update with %d shards, expecting %d", t.NumberOfShards(), w.numShards)
+	}
 	var (
+		iOpts                     = w.opts.InstrumentOptions()
 		newConsumerServiceWriters = make(map[string]consumerServiceWriter, len(t.ConsumerServices()))
 		toBeClosed                []consumerServiceWriter
 		multiErr                  xerrors.MultiError
-		iOpts                     = w.opts.InstrumentOptions()
 	)
 	for _, cs := range t.ConsumerServices() {
 		key := cs.ServiceID().String()

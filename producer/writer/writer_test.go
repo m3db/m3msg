@@ -79,6 +79,7 @@ func TestWriterWriteAfterClosed(t *testing.T) {
 	w.Close()
 
 	md := producer.NewMockData(ctrl)
+	md.EXPECT().Finalize(producer.Dropped)
 	rd := data.NewRefCountedData(md, nil)
 	err = w.Write(rd)
 	require.Error(t, err)
@@ -114,6 +115,75 @@ func TestWriterWriteWithInvalidShard(t *testing.T) {
 	rd = data.NewRefCountedData(md, nil)
 	err = w.Write(rd)
 	require.Error(t, err)
+}
+
+func TestWriterInvalidTopicUpdate(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mem.NewStore()
+	cs := client.NewMockClient(ctrl)
+	cs.EXPECT().Store(gomock.Any()).Return(store, nil)
+
+	ts, err := topic.NewService(topic.NewServiceOptions().SetConfigService(cs))
+	require.NoError(t, err)
+
+	opts := testOptions().SetTopicService(ts)
+	sid1 := services.NewServiceID().SetName("s1")
+	cs1 := topic.NewConsumerService().SetConsumptionType(topic.Replicated).SetServiceID(sid1)
+	testTopic := topic.NewTopic().
+		SetName(opts.TopicName()).
+		SetNumberOfShards(2).
+		SetConsumerServices([]topic.ConsumerService{cs1})
+	pb, err := topic.ToProto(testTopic)
+	require.NoError(t, err)
+	store.Set(opts.TopicName(), pb)
+
+	sd := services.NewMockServices(ctrl)
+	opts = opts.SetServiceDiscovery(sd)
+	ps1 := testPlacementService(store, sid1)
+	sd.EXPECT().PlacementService(sid1, gomock.Any()).Return(ps1, nil)
+
+	p1 := placement.NewPlacement().
+		SetInstances([]placement.Instance{
+			placement.NewInstance().
+				SetID("i1").
+				SetEndpoint("addr1").
+				SetShards(shard.NewShards([]shard.Shard{
+					shard.NewShard(0).SetState(shard.Available),
+					shard.NewShard(1).SetState(shard.Available),
+				})),
+		}).
+		SetShards([]uint32{0, 1}).
+		SetReplicaFactor(1).
+		SetIsSharded(true)
+	require.NoError(t, ps1.Set(p1))
+
+	w := NewWriter(opts).(*writer)
+	var wg sync.WaitGroup
+	w.processFn = func(i interface{}) error {
+		defer wg.Done()
+		return w.process(i)
+	}
+	wg.Add(1)
+	require.NoError(t, w.Init())
+	wg.Wait()
+	defer w.Close()
+
+	require.Equal(t, 2, int(w.numShards))
+	testTopic = topic.NewTopic().
+		SetName(opts.TopicName()).
+		SetNumberOfShards(3).
+		SetConsumerServices([]topic.ConsumerService{cs1})
+	pb, err = topic.ToProto(testTopic)
+	require.NoError(t, err)
+	wg.Add(1)
+	store.Set(opts.TopicName(), pb)
+	wg.Wait()
+
+	require.Equal(t, 2, int(w.numShards))
 }
 
 func TestWriterWriteRegisterFilter(t *testing.T) {
