@@ -270,6 +270,7 @@ func TestReplicatedShardWriterRemoveMessageWriter(t *testing.T) {
 	sw.Write(data.NewRefCountedData(md, nil))
 
 	require.Equal(t, 2, len(sw.messageWriters))
+
 	mw1 := sw.messageWriters[i1.Endpoint()].(*messageWriterImpl)
 	for {
 		mw1.RLock()
@@ -280,14 +281,22 @@ func TestReplicatedShardWriterRemoveMessageWriter(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+
 	mw2 := sw.messageWriters[i2.Endpoint()].(*messageWriterImpl)
-	mw2.RLock()
-	require.Equal(t, 1, mw2.queue.Len())
-	mw2.RUnlock()
+	for {
+		mw2.RLock()
+		l := mw2.queue.Len()
+		mw2.RUnlock()
+		if l == 1 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	conn, err := lis2.Accept()
 	require.NoError(t, err)
 	defer conn.Close()
+
 	server := proto.NewEncodeDecoder(conn, opts.EncodeDecoderOptions())
 
 	var msg msgpb.Message
