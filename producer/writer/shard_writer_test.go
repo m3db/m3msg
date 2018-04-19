@@ -22,6 +22,7 @@ package writer
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,8 +65,14 @@ func TestSharedShardWriter(t *testing.T) {
 
 	i1 := placement.NewInstance().SetEndpoint("i1")
 	i2 := placement.NewInstance().SetEndpoint(addr2)
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	sw.UpdateInstances(
@@ -150,8 +157,13 @@ func TestReplicatedShardWriter(t *testing.T) {
 		SetEndpoint("i3").
 		SetShards(shard.NewShards([]shard.Shard{shard.NewShard(1)}))
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis1, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	sw.UpdateInstances(
@@ -197,8 +209,10 @@ func TestReplicatedShardWriter(t *testing.T) {
 		cws,
 	)
 
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis2, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	for {
@@ -252,8 +266,13 @@ func TestReplicatedShardWriterRemoveMessageWriter(t *testing.T) {
 		SetEndpoint(addr2).
 		SetShards(shard.NewShards([]shard.Shard{shard.NewShard(1)}))
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis1, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	sw.UpdateInstances(

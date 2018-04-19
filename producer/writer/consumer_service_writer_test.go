@@ -122,8 +122,13 @@ func TestConsumerServiceWriterWithSharedConsumer(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	md := producer.NewMockData(ctrl)
@@ -249,12 +254,19 @@ func TestConsumerServiceWriterWithReplicatedConsumer(t *testing.T) {
 		}
 	}
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis1, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis2, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	md := producer.NewMockData(ctrl)
@@ -300,8 +312,10 @@ func TestConsumerServiceWriterWithReplicatedConsumer(t *testing.T) {
 		}
 	}
 
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis2, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	md = producer.NewMockData(ctrl)

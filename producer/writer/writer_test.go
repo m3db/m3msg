@@ -450,16 +450,22 @@ func TestWriterWrite(t *testing.T) {
 	wg.Add(1)
 	require.NoError(t, w.Write(rd))
 
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis1, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis2, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
+	wg.Add(1)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis3, opts.EncodeDecoderOptions())
+		wg.Done()
 	}()
 
 	wg.Wait()
