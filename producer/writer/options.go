@@ -38,8 +38,7 @@ const (
 	defaultTopicWatchInitTimeout     = 5 * time.Second
 	defaultCloseCheckInterval        = 2 * time.Second
 	defaultConnectionResetDelay      = 2 * time.Second
-	// Iterate and remove 1M list item cost about 160ms.
-	defaultMessageRetryBatchSize = 1024 * 1024
+	defaultMessageRetryBatchSize     = 16 * 1024
 	// Using 16K which provides much better performance comparing
 	// to lower values like 1k ~ 8k.
 	defaultConnectionBufferSize = 16384
