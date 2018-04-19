@@ -231,7 +231,7 @@ func TestWriterWriteRegisterFilter(t *testing.T) {
 		SetName(opts.TopicName()).
 		SetNumberOfShards(6).
 		SetConsumerServices([]topic.ConsumerService{cs1})
-	w.processTopic(testTopic)
+	w.process(testTopic)
 }
 
 func TestWriterTopicUpdate(t *testing.T) {
