@@ -154,10 +154,6 @@ func TestReplicatedShardWriter(t *testing.T) {
 		testConsumeAndAckOnConnectionListener(t, lis1, opts.EncodeDecoderOptions())
 	}()
 
-	go func() {
-		testConsumeAndAckOnConnectionListener(t, lis2, opts.EncodeDecoderOptions())
-	}()
-
 	sw.UpdateInstances(
 		[]placement.Instance{i1, i3},
 		cws,
@@ -184,11 +180,11 @@ func TestReplicatedShardWriter(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	mw2 := sw.messageWriters[i3.Endpoint()].(*messageWriterImpl)
+	mw3 := sw.messageWriters[i3.Endpoint()].(*messageWriterImpl)
 	for {
-		mw2.RLock()
-		l := mw2.queue.Len()
-		mw2.RUnlock()
+		mw3.RLock()
+		l := mw3.queue.Len()
+		mw3.RUnlock()
 		if l == 1 {
 			break
 		}
@@ -200,15 +196,25 @@ func TestReplicatedShardWriter(t *testing.T) {
 		[]placement.Instance{i1, i2},
 		cws,
 	)
+
+	go func() {
+		testConsumeAndAckOnConnectionListener(t, lis2, opts.EncodeDecoderOptions())
+	}()
+
 	for {
-		mw2.RLock()
-		l := mw2.queue.Len()
-		mw2.RUnlock()
+		mw3.RLock()
+		l := mw3.queue.Len()
+		mw3.RUnlock()
 		if l == 0 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	mw2 := sw.messageWriters[i2.Endpoint()].(*messageWriterImpl)
+	require.Equal(t, mw3, mw2)
+	_, ok := sw.messageWriters[i3.Endpoint()]
+	require.False(t, ok)
 }
 
 func TestReplicatedShardWriterRemoveMessageWriter(t *testing.T) {
