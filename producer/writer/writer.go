@@ -146,6 +146,8 @@ func (w *writer) Init() error {
 
 func (w *writer) process(update interface{}) error {
 	t := update.(topic.Topic)
+	// We don't allow changing number of shards for topics, it will be
+	// prevented on topic service side, but also being defensive here as well.
 	if w.numShards != 0 && w.numShards != t.NumberOfShards() {
 		w.m.topicUpdateError.Inc(1)
 		return fmt.Errorf("invalid topic update with %d shards, expecting %d", t.NumberOfShards(), w.numShards)
