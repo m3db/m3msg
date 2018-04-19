@@ -395,13 +395,25 @@ func (w *messageWriterImpl) SetCutoverNanos(nanos int64) {
 
 func (w *messageWriterImpl) AddConsumerWriter(addr string, cw consumerWriter) {
 	w.Lock()
-	w.consumerWriters[addr] = cw
+	newConsumerWriters := make(map[string]consumerWriter, len(w.consumerWriters)+1)
+	for key, cw := range w.consumerWriters {
+		newConsumerWriters[key] = cw
+	}
+	newConsumerWriters[addr] = cw
+	w.consumerWriters = newConsumerWriters
 	w.Unlock()
 }
 
 func (w *messageWriterImpl) RemoveConsumerWriter(addr string) {
 	w.Lock()
-	delete(w.consumerWriters, addr)
+	newConsumerWriters := make(map[string]consumerWriter, len(w.consumerWriters)-1)
+	for key, cw := range w.consumerWriters {
+		if key == addr {
+			continue
+		}
+		newConsumerWriters[key] = cw
+	}
+	w.consumerWriters = newConsumerWriters
 	w.Unlock()
 }
 
