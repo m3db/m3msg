@@ -190,7 +190,12 @@ func (w *writer) process(update interface{}) error {
 			toBeClosed = append(toBeClosed, csw)
 		}
 	}
-	// Allow InitValueError for any topic updates during runtime.
+	// Allow InitValueError for any future topic updates after starting up.
+	// This is to prevent the case when a new consumer service got added to
+	// the topic, but the producer could not get initial value for its
+	// placement. We will continue to watch for placement updates for the new
+	// consumer service in the background, so the producer can write to it once
+	// the placement came in.
 	w.initType = allowInitValueError
 	w.m.numConsumerServices.Update(float64(len(newConsumerServiceWriters)))
 
@@ -237,22 +242,24 @@ func (w *writer) Close() {
 
 func (w *writer) RegisterFilter(sid services.ServiceID, filter producer.FilterFunc) {
 	w.Lock()
+	defer w.Unlock()
+
 	key := sid.String()
 	w.filterRegistry[key] = filter
 	csw, ok := w.consumerServiceWriters[key]
 	if ok {
 		csw.RegisterFilter(filter)
 	}
-	w.Unlock()
 }
 
 func (w *writer) UnregisterFilter(sid services.ServiceID) {
 	w.Lock()
+	defer w.Unlock()
+
 	key := sid.String()
 	delete(w.filterRegistry, key)
 	csw, ok := w.consumerServiceWriters[key]
 	if ok {
 		csw.UnregisterFilter()
 	}
-	w.Unlock()
 }
