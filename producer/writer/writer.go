@@ -191,7 +191,7 @@ func (w *writer) process(update interface{}) error {
 		}
 	}
 	// Allow InitValueError for any future topic updates after starting up.
-	// This is to prevent the case when a new consumer service got added to
+	// This is to handle the case when a new consumer service got added to
 	// the topic, but the producer could not get initial value for its
 	// placement. We will continue to watch for placement updates for the new
 	// consumer service in the background, so the producer can write to it once
