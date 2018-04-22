@@ -26,9 +26,8 @@ import (
 )
 
 var (
-	defaultAckBufferSize             = 100
-	defaultConnectionWriteBufferSize = 16384
-	defaultConnectionReadBufferSize  = 16384
+	defaultAckBufferSize        = 100
+	defaultConnectionBufferSize = 16384
 )
 
 type options struct {
@@ -45,8 +44,8 @@ func NewOptions() Options {
 		encdecOptions:   proto.NewEncodeDecoderOptions(),
 		messagePoolOpts: pool.NewObjectPoolOptions(),
 		ackBufferSize:   defaultAckBufferSize,
-		writeBufferSize: defaultConnectionWriteBufferSize,
-		readBufferSize:  defaultConnectionReadBufferSize,
+		writeBufferSize: defaultConnectionBufferSize,
+		readBufferSize:  defaultConnectionBufferSize,
 	}
 }
 
