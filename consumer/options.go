@@ -26,28 +26,27 @@ import (
 )
 
 var (
-	defaultAckBufferSize = 100
-	defaultBufferSize    = 16384
+	defaultAckBufferSize             = 100
+	defaultConnectionWriteBufferSize = 16384
+	defaultConnectionReadBufferSize  = 16384
 )
 
 type options struct {
-	encdecOptions    proto.EncodeDecoderOptions
-	messagePoolOpts  pool.ObjectPoolOptions
-	consumerPoolOpts pool.ObjectPoolOptions
-	ackBufferSize    int
-	writeBufferSize  int
-	readBufferSize   int
+	encdecOptions   proto.EncodeDecoderOptions
+	messagePoolOpts pool.ObjectPoolOptions
+	ackBufferSize   int
+	writeBufferSize int
+	readBufferSize  int
 }
 
 // NewOptions creates a new options.
 func NewOptions() Options {
 	return &options{
-		encdecOptions:    proto.NewEncodeDecoderOptions(),
-		messagePoolOpts:  pool.NewObjectPoolOptions(),
-		consumerPoolOpts: pool.NewObjectPoolOptions(),
-		ackBufferSize:    defaultAckBufferSize,
-		writeBufferSize:  defaultBufferSize,
-		readBufferSize:   defaultBufferSize,
+		encdecOptions:   proto.NewEncodeDecoderOptions(),
+		messagePoolOpts: pool.NewObjectPoolOptions(),
+		ackBufferSize:   defaultAckBufferSize,
+		writeBufferSize: defaultConnectionWriteBufferSize,
+		readBufferSize:  defaultConnectionReadBufferSize,
 	}
 }
 
@@ -78,16 +77,6 @@ func (opts *options) AckBufferSize() int {
 func (opts *options) SetAckBufferSize(value int) Options {
 	o := *opts
 	o.ackBufferSize = value
-	return &o
-}
-
-func (opts *options) ConsumerPoolOptions() pool.ObjectPoolOptions {
-	return opts.consumerPoolOpts
-}
-
-func (opts *options) SetConsumerPoolOptions(value pool.ObjectPoolOptions) Options {
-	o := *opts
-	o.consumerPoolOpts = value
 	return &o
 }
 

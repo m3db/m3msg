@@ -36,7 +36,7 @@ type listener struct {
 	msgPool *messagePool
 }
 
-// NewListener creates a consumer listener on the address.
+// NewListener creates a consumer listener.
 func NewListener(addr string, opts Options) (Listener, error) {
 	if opts == nil {
 		opts = NewOptions()
