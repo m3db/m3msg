@@ -104,7 +104,7 @@ func (c *consumer) Message() (Message, error) {
 
 // This function could be called concurrently if messages are being
 // processed concurrently.
-func (c *consumer) ack(m msgpb.Metadata) {
+func (c *consumer) tryAck(m msgpb.Metadata) {
 	c.ackLock.Lock()
 	if !c.canAck {
 		c.ackLock.Unlock()
@@ -115,15 +115,16 @@ func (c *consumer) ack(m msgpb.Metadata) {
 		c.ackLock.Unlock()
 		return
 	}
-	c.encodeAckWithLock()
+	if err := c.encodeAckWithLock(); err != nil {
+		c.conn.Close()
+	}
 	c.ackLock.Unlock()
 }
 
-func (c *consumer) encodeAckWithLock() {
-	if err := c.encdec.Encode(&c.ackPb); err != nil {
-		c.conn.Close()
-	}
+func (c *consumer) encodeAckWithLock() error {
+	err := c.encdec.Encode(&c.ackPb)
 	c.ackPb.Metadata = c.ackPb.Metadata[:0]
+	return err
 }
 
 func (c *consumer) Close() {
@@ -154,7 +155,7 @@ func (m *message) Bytes() []byte {
 }
 
 func (m *message) Ack() {
-	m.c.ack(m.Metadata)
+	m.c.tryAck(m.Metadata)
 	if m.p != nil {
 		m.p.Put(m)
 	}
