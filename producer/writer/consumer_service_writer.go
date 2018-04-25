@@ -65,9 +65,7 @@ type consumerServiceWriter interface {
 	Init(initType) error
 
 	// Close closes the writer and the background watch thread.
-	// It should block until all the data for the given consumer service
-	// have been consumed.
-	Close()
+	Close(t closeType)
 
 	// RegisterFilter registers a filter for the consumer service.
 	RegisterFilter(fn producer.FilterFunc)
@@ -258,7 +256,7 @@ func (w *consumerServiceWriterImpl) diffPlacementWithLock(newPlacement placement
 	return newConsumerWriters, toBeDeleted
 }
 
-func (w *consumerServiceWriterImpl) Close() {
+func (w *consumerServiceWriterImpl) Close(t closeType) {
 	w.Lock()
 	if w.closed {
 		w.Unlock()
@@ -269,7 +267,7 @@ func (w *consumerServiceWriterImpl) Close() {
 
 	// Blocks until all messages consuemd.
 	for _, sw := range w.shardWriters {
-		sw.Close()
+		sw.Close(t)
 	}
 	w.value.Unwatch()
 	for _, cw := range w.consumerWriters {

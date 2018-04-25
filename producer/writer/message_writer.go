@@ -37,6 +37,16 @@ const (
 	defaultToBeRetriedSize = 1024
 )
 
+type closeType int
+
+const (
+	// waitForAcks blocks the close call untill all the messages have been acked.
+	waitForAcks closeType = iota
+	// doNotWaitForAcks will close the message writer and clean up all the unacked
+	// messages without waiting for them to be acknowledged.
+	doNotWaitForAcks
+)
+
 type messageWriter interface {
 	// Write writes the data.
 	Write(d producer.RefCountedData)
@@ -49,7 +59,7 @@ type messageWriter interface {
 
 	// Close closes the writer.
 	// It should block until all buffered data have been acknowledged.
-	Close()
+	Close(t closeType)
 
 	// AddConsumerWriter adds a consumer writer for the given address.
 	AddConsumerWriter(addr string, cw consumerWriter)
@@ -129,6 +139,7 @@ type messageWriterImpl struct {
 	cutOverNanos    int64
 	toBeRetried     []*message
 	isClosed        bool
+	skipRetry       bool
 	doneCh          chan struct{}
 	wg              sync.WaitGroup
 	m               messageWriterMetrics
@@ -323,6 +334,17 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			w.mPool.Put(m)
 			continue
 		}
+		if w.skipRetry {
+			// Simply ack the messages here to mark them as consumed for this
+			// message writer, this happens when user removes a consumer service
+			// during runtime that may be unhealthy to consume the messages.
+			// So that the unacked messages for the unhealthy consumer services
+			// do not stay in memory forever.
+			w.Ack(m.Metadata())
+			w.queue.Remove(e)
+			w.mPool.Put(m)
+			continue
+		}
 		if m.RetryAtNanos() >= nowNanos {
 			continue
 		}
@@ -331,13 +353,16 @@ func (w *messageWriterImpl) retryBatchWithLock(
 	return next, w.toBeRetried
 }
 
-func (w *messageWriterImpl) Close() {
+func (w *messageWriterImpl) Close(t closeType) {
 	w.Lock()
 	if w.isClosed {
 		w.Unlock()
 		return
 	}
 	w.isClosed = true
+	if t == doNotWaitForAcks {
+		w.skipRetry = true
+	}
 	w.Unlock()
 	// NB: Wait until all messages acked then close.
 	w.waitUntilAllMessageAcked()

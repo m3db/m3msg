@@ -76,11 +76,11 @@ func (_mr *MockshardWriterMockRecorder) UpdateInstances(arg0, arg1 interface{}) 
 }
 
 // Close mocks base method
-func (_m *MockshardWriter) Close() {
-	_m.ctrl.Call(_m, "Close")
+func (_m *MockshardWriter) Close(t closeType) {
+	_m.ctrl.Call(_m, "Close", t)
 }
 
 // Close indicates an expected call of Close
-func (_mr *MockshardWriterMockRecorder) Close() *gomock.Call {
-	return _mr.mock.ctrl.RecordCallWithMethodType(_mr.mock, "Close", reflect.TypeOf((*MockshardWriter)(nil).Close))
+func (_mr *MockshardWriterMockRecorder) Close(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCallWithMethodType(_mr.mock, "Close", reflect.TypeOf((*MockshardWriter)(nil).Close), arg0)
 }

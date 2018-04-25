@@ -44,7 +44,7 @@ type shardWriter interface {
 
 	// Close closes the writer. It should block until
 	// all the data for the given shard have been consumed.
-	Close()
+	Close(t closeType)
 }
 
 type sharedShardWriter struct {
@@ -102,11 +102,11 @@ func (w *sharedShardWriter) UpdateInstances(
 	w.instances = newInstancesMap
 }
 
-func (w *sharedShardWriter) Close() {
+func (w *sharedShardWriter) Close(t closeType) {
 	if !w.isClosed.CAS(false, true) {
 		return
 	}
-	w.mw.Close()
+	w.mw.Close(t)
 }
 
 type replicatedShardWriter struct {
@@ -223,7 +223,7 @@ func (w *replicatedShardWriter) UpdateInstances(
 		// This needs to be in done in a go routine as closing a message writer will
 		// block until all messages consumed.
 		go func() {
-			mw.Close()
+			mw.Close(doNotWaitForAcks)
 			w.ackRouter.Unregister(mw.ReplicatedShardID())
 		}()
 	}
@@ -243,7 +243,7 @@ func (w *replicatedShardWriter) updateCutoverCutoffNanos(
 	mw.SetCutoverNanos(s.CutoverNanos())
 }
 
-func (w *replicatedShardWriter) Close() {
+func (w *replicatedShardWriter) Close(t closeType) {
 	w.Lock()
 	defer w.Unlock()
 
@@ -252,7 +252,7 @@ func (w *replicatedShardWriter) Close() {
 	}
 	w.isClosed = true
 	for _, mw := range w.messageWriters {
-		mw.Close()
+		mw.Close(t)
 	}
 }
 

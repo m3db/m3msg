@@ -98,8 +98,8 @@ func TestMessageWriter(t *testing.T) {
 	md2.EXPECT().Finalize(producer.Consumed)
 	w.Ack(metadata{shard: 200, id: 2})
 	require.True(t, isEmptyWithLock(w.acks))
-	w.Close()
-	w.Close()
+	w.Close(waitForAcks)
+	w.Close(waitForAcks)
 }
 
 func TestMessageWriterRetry(t *testing.T) {
@@ -135,7 +135,7 @@ func TestMessageWriterRetry(t *testing.T) {
 	msg := w.acks.m[metadata{shard: 200, id: 1}]
 	require.Equal(t, 1, int(msg.WriteTimes()))
 	w.Init()
-	defer w.Close()
+	defer w.Close(waitForAcks)
 
 	for {
 		w.RLock()
@@ -190,7 +190,7 @@ func TestMessageWriterCleanupDroppedMessage(t *testing.T) {
 
 	require.Equal(t, 1, w.(*messageWriterImpl).queue.Len())
 	w.Init()
-	defer w.Close()
+	defer w.Close(waitForAcks)
 
 	for {
 		w.(*messageWriterImpl).Lock()
@@ -243,7 +243,7 @@ func TestMessageWriterCleanupAckedMessage(t *testing.T) {
 	require.Equal(t, 1, w.(*messageWriterImpl).queue.Len())
 
 	w.Init()
-	defer w.Close()
+	defer w.Close(waitForAcks)
 
 	for {
 		w.(*messageWriterImpl).Lock()
@@ -356,6 +356,33 @@ func TestNextRetryNanos(t *testing.T) {
 	retryAtNanos = w.nextRetryNanos(m.WriteTimes(), nowNanos)
 	require.True(t, retryAtNanos >= nowNanos+int64(backOffDuration))
 	require.True(t, retryAtNanos < nowNanos+2*int64(backOffDuration))
+}
+
+func TestMessageWriterCloseImmediately(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	opts := testOptions()
+	w := newMessageWriter(200, testMessagePool(opts), opts)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	md := producer.NewMockData(ctrl)
+
+	rd := data.NewRefCountedData(md, nil)
+	md.EXPECT().Finalize(producer.Consumed)
+	md.EXPECT().Bytes().Return([]byte("foo"))
+	w.Write(rd)
+
+	// A get will allocate a new message because the old one has not been returned to pool yet.
+	m := w.(*messageWriterImpl).mPool.Get()
+	require.Nil(t, m.RefCountedData)
+
+	require.Equal(t, 1, w.(*messageWriterImpl).queue.Len())
+	w.Init()
+	w.Close(doNotWaitForAcks)
+	require.Equal(t, 0, w.(*messageWriterImpl).queue.Len())
+	require.True(t, isEmptyWithLock(w.(*messageWriterImpl).acks))
 }
 
 func isEmptyWithLock(h *acks) bool {
