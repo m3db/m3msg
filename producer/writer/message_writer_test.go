@@ -374,10 +374,6 @@ func TestMessageWriterCloseImmediately(t *testing.T) {
 	md.EXPECT().Bytes().Return([]byte("foo"))
 	w.Write(rd)
 
-	// A get will allocate a new message because the old one has not been returned to pool yet.
-	m := w.(*messageWriterImpl).mPool.Get()
-	require.Nil(t, m.RefCountedData)
-
 	require.Equal(t, 1, w.(*messageWriterImpl).queue.Len())
 	w.Init()
 	w.Close()

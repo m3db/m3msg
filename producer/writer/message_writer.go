@@ -351,12 +351,12 @@ func (w *messageWriterImpl) Close() {
 	w.isClosed = true
 	w.Unlock()
 	// NB: Wait until all messages cleaned up then close.
-	w.waitUntilAllMessageAcked()
+	w.waitUntilAllMessageRemoved()
 	close(w.doneCh)
 	w.wg.Wait()
 }
 
-func (w *messageWriterImpl) waitUntilAllMessageAcked() {
+func (w *messageWriterImpl) waitUntilAllMessageRemoved() {
 	ticker := time.NewTicker(w.opts.CloseCheckInterval())
 	defer ticker.Stop()
 
