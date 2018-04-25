@@ -40,7 +40,7 @@ const (
 type closeType int
 
 const (
-	// waitForAcks blocks the close call untill all the messages have been acked.
+	// waitForAcks blocks the close call until all the messages have been acked.
 	waitForAcks closeType = iota
 	// doNotWaitForAcks will close the message writer and clean up all the unacked
 	// messages without waiting for them to be acknowledged.
