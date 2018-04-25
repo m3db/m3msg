@@ -98,8 +98,8 @@ func TestMessageWriter(t *testing.T) {
 	md2.EXPECT().Finalize(producer.Consumed)
 	w.Ack(metadata{shard: 200, id: 2})
 	require.True(t, isEmptyWithLock(w.acks))
-	w.Close(waitForAcks)
-	w.Close(waitForAcks)
+	w.Close()
+	w.Close()
 }
 
 func TestMessageWriterRetry(t *testing.T) {
@@ -135,7 +135,7 @@ func TestMessageWriterRetry(t *testing.T) {
 	msg := w.acks.m[metadata{shard: 200, id: 1}]
 	require.Equal(t, 1, int(msg.WriteTimes()))
 	w.Init()
-	defer w.Close(waitForAcks)
+	defer w.Close()
 
 	for {
 		w.RLock()
@@ -190,7 +190,7 @@ func TestMessageWriterCleanupDroppedMessage(t *testing.T) {
 
 	require.Equal(t, 1, w.(*messageWriterImpl).queue.Len())
 	w.Init()
-	defer w.Close(waitForAcks)
+	defer w.Close()
 
 	for {
 		w.(*messageWriterImpl).Lock()
@@ -243,7 +243,7 @@ func TestMessageWriterCleanupAckedMessage(t *testing.T) {
 	require.Equal(t, 1, w.(*messageWriterImpl).queue.Len())
 
 	w.Init()
-	defer w.Close(waitForAcks)
+	defer w.Close()
 
 	for {
 		w.(*messageWriterImpl).Lock()
@@ -380,7 +380,7 @@ func TestMessageWriterCloseImmediately(t *testing.T) {
 
 	require.Equal(t, 1, w.(*messageWriterImpl).queue.Len())
 	w.Init()
-	w.Close(doNotWaitForAcks)
+	w.Close()
 	require.Equal(t, 0, w.(*messageWriterImpl).queue.Len())
 	require.True(t, isEmptyWithLock(w.(*messageWriterImpl).acks))
 }

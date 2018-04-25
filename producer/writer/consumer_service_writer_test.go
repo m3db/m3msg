@@ -175,8 +175,8 @@ func TestConsumerServiceWriterWithSharedConsumer(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	csw.Close(waitForAcks)
-	csw.Close(waitForAcks)
+	csw.Close()
+	csw.Close()
 }
 
 func TestConsumerServiceWriterWithReplicatedConsumer(t *testing.T) {
@@ -332,8 +332,8 @@ func TestConsumerServiceWriterWithReplicatedConsumer(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	csw.Close(waitForAcks)
-	csw.Close(waitForAcks)
+	csw.Close()
+	csw.Close()
 }
 
 func TestConsumerServiceWriterFilter(t *testing.T) {
@@ -396,7 +396,7 @@ func TestConsumerServiceWriterAllowInitValueErrorWithCreateWatchError(t *testing
 	opts := testOptions().SetServiceDiscovery(sd)
 	w, err := newConsumerServiceWriter(cs, 3, testMessagePool(opts), opts)
 	require.NoError(t, err)
-	defer w.Close(waitForAcks)
+	defer w.Close()
 
 	require.Error(t, w.Init(allowInitValueError))
 }
@@ -417,7 +417,7 @@ func TestConsumerServiceWriterAllowInitValueErrorWithInitValueError(t *testing.T
 	opts := testOptions().SetServiceDiscovery(sd)
 	w, err := newConsumerServiceWriter(cs, 3, testMessagePool(opts), opts)
 	require.NoError(t, err)
-	defer w.Close(waitForAcks)
+	defer w.Close()
 
 	require.NoError(t, w.Init(allowInitValueError))
 }
@@ -440,7 +440,7 @@ func TestConsumerServiceWriterInitFailOnErrorWithCreateWatchError(t *testing.T) 
 	opts := testOptions().SetServiceDiscovery(sd)
 	w, err := newConsumerServiceWriter(cs, 3, testMessagePool(opts), opts)
 	require.NoError(t, err)
-	defer w.Close(waitForAcks)
+	defer w.Close()
 
 	err = w.Init(failOnError)
 	require.Error(t, err)
@@ -464,7 +464,7 @@ func TestConsumerServiceWriterInitFailOnErrorWithInitValueError(t *testing.T) {
 	opts := testOptions().SetServiceDiscovery(sd)
 	w, err := newConsumerServiceWriter(cs, 3, testMessagePool(opts), opts)
 	require.NoError(t, err)
-	defer w.Close(waitForAcks)
+	defer w.Close()
 
 	err = w.Init(failOnError)
 	require.Error(t, err)

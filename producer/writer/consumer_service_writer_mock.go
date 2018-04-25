@@ -77,13 +77,13 @@ func (_mr *MockconsumerServiceWriterMockRecorder) Init(arg0 interface{}) *gomock
 }
 
 // Close mocks base method
-func (_m *MockconsumerServiceWriter) Close(t closeType) {
-	_m.ctrl.Call(_m, "Close", t)
+func (_m *MockconsumerServiceWriter) Close() {
+	_m.ctrl.Call(_m, "Close")
 }
 
 // Close indicates an expected call of Close
-func (_mr *MockconsumerServiceWriterMockRecorder) Close(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCallWithMethodType(_mr.mock, "Close", reflect.TypeOf((*MockconsumerServiceWriter)(nil).Close), arg0)
+func (_mr *MockconsumerServiceWriterMockRecorder) Close() *gomock.Call {
+	return _mr.mock.ctrl.RecordCallWithMethodType(_mr.mock, "Close", reflect.TypeOf((*MockconsumerServiceWriter)(nil).Close))
 }
 
 // RegisterFilter mocks base method

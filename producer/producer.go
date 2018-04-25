@@ -46,9 +46,9 @@ func (p *producer) Produce(data Data) error {
 	return p.Writer.Write(rd)
 }
 
-func (p *producer) Close() {
+func (p *producer) Close(ct CloseType) {
 	// Must close buffer first, it will stop receiving new writes
 	// and return when all data cleared up. We can safely close the writer after that.
-	p.Buffer.Close()
+	p.Buffer.Close(ct)
 	p.Writer.Close()
 }

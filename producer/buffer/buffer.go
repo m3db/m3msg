@@ -66,10 +66,11 @@ type buffer struct {
 	onFinalizeFn  data.OnFinalizeFn
 	m             bufferMetrics
 
-	size     *atomic.Uint64
-	isClosed bool
-	doneCh   chan struct{}
-	wg       sync.WaitGroup
+	size           *atomic.Uint64
+	isClosed       bool
+	doneCh         chan struct{}
+	dropEverything bool
+	wg             sync.WaitGroup
 }
 
 // NewBuffer returns a new buffer.
@@ -181,11 +182,20 @@ func (b *buffer) cleanupWithLock() {
 		d := e.Value.(producer.RefCountedData)
 		if d.IsDroppedOrConsumed() {
 			b.buffers.Remove(e)
+			continue
+		}
+		if !b.dropEverything {
+			continue
+		}
+		if d.Drop() {
+			b.m.messageDropped.Inc(1)
+			b.m.bytesDropped.Inc(int64(d.Size()))
+			b.buffers.Remove(e)
 		}
 	}
 }
 
-func (b *buffer) Close() {
+func (b *buffer) Close(ct producer.CloseType) {
 	// Stop taking writes right away.
 	b.Lock()
 	if b.isClosed {
@@ -193,6 +203,9 @@ func (b *buffer) Close() {
 		return
 	}
 	b.isClosed = true
+	if ct == producer.DropEverything {
+		b.dropEverything = true
+	}
 	b.Unlock()
 
 	b.waitUntilAllDataConsumed()

@@ -44,7 +44,7 @@ func TestSharedShardWriter(t *testing.T) {
 	a := newAckRouter(2)
 	opts := testOptions()
 	sw := newSharedShardWriter(1, a, testMessagePool(opts), opts)
-	defer sw.Close(waitForAcks)
+	defer sw.Close()
 
 	cw1 := newConsumerWriter("i1", a, opts)
 	cw1.Init()
@@ -119,7 +119,7 @@ func TestReplicatedShardWriter(t *testing.T) {
 	a := newAckRouter(3)
 	opts := testOptions()
 	sw := newReplicatedShardWriter(1, 200, a, testMessagePool(opts), opts).(*replicatedShardWriter)
-	defer sw.Close(waitForAcks)
+	defer sw.Close()
 
 	lis1, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -339,7 +339,7 @@ func TestReplicatedShardWriterRemoveMessageWriter(t *testing.T) {
 	require.Equal(t, 0, mw2.queue.Len())
 	mw2.RUnlock()
 
-	sw.Close(waitForAcks)
+	sw.Close()
 }
 
 func TestReplicatedShardWriterUpdate(t *testing.T) {
@@ -348,7 +348,7 @@ func TestReplicatedShardWriterUpdate(t *testing.T) {
 	a := newAckRouter(4)
 	opts := testOptions()
 	sw := newReplicatedShardWriter(1, 200, a, testMessagePool(opts), opts).(*replicatedShardWriter)
-	defer sw.Close(waitForAcks)
+	defer sw.Close()
 
 	cw1 := newConsumerWriter("i1", a, opts)
 	cw2 := newConsumerWriter("i2", a, opts)
