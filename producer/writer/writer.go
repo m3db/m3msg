@@ -180,6 +180,7 @@ func (w *writer) process(update interface{}) error {
 		if err = csw.Init(w.initType); err != nil {
 			w.logger.Errorf("could not init consumer service writer for %s: %v", cs.String(), err)
 			multiErr = multiErr.Add(err)
+			// Could not initialize the consumer service, simply close it.
 			csw.Close(doNotWaitForAcks)
 			continue
 		}
@@ -213,6 +214,7 @@ func (w *writer) process(update interface{}) error {
 	// Close removed consumer service.
 	go func() {
 		for _, csw := range toBeClosed {
+			// Do not wait for acks for the removed consumer services.
 			csw.Close(doNotWaitForAcks)
 		}
 	}()
@@ -236,6 +238,7 @@ func (w *writer) Close() {
 
 	w.value.Unwatch()
 	for _, csw := range w.consumerServiceWriters {
+		// During a graceful shutdown, wait for all messages to be acked.
 		csw.Close(waitForAcks)
 	}
 }
