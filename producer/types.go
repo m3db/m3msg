@@ -78,7 +78,7 @@ type Producer interface {
 	// Close stops the producer from accepting new requests immediately.
 	// If the CloseType is WaitForConsumption, then it will block until all the data has been consumed.
 	// If the CloseType is DropEverything, then it will simply drop all the data buffered and return.
-	Close(CloseType)
+	Close(ct CloseType)
 }
 
 // FilterFunc can filter data.
@@ -107,7 +107,9 @@ type Buffer interface {
 	// Init initializes the buffer.
 	Init()
 
-	// Close closes the buffer.
+	// Close stops the buffer from accepting new requests immediately.
+	// If the CloseType is WaitForConsumption, then it will block until all the data has been consumed.
+	// If the CloseType is DropEverything, then it will simply drop all the data buffered and return.
 	Close(ct CloseType)
 }
 
