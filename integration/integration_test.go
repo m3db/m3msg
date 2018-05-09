@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/m3db/m3msg/topic"
+	"github.com/m3db/m3x/test"
 
 	"github.com/fortytw2/leaktest"
 	"github.com/golang/mock/gomock"
@@ -36,7 +37,7 @@ import (
 func TestSharedConsumer(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -51,7 +52,7 @@ func TestSharedConsumer(t *testing.T) {
 func TestReplicatedConsumer(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -66,7 +67,7 @@ func TestReplicatedConsumer(t *testing.T) {
 func TestSharedAndReplicatedConsumers(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -82,7 +83,7 @@ func TestSharedAndReplicatedConsumers(t *testing.T) {
 func TestSharedConsumerWithDeadInstance(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -104,7 +105,7 @@ func TestSharedConsumerWithDeadInstance(t *testing.T) {
 func TestSharedConsumerWithDeadConnection(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -127,7 +128,7 @@ func TestSharedConsumerWithDeadConnection(t *testing.T) {
 func TestReplicatedConsumerWithDeadConnection(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -150,7 +151,7 @@ func TestReplicatedConsumerWithDeadConnection(t *testing.T) {
 func TestSharedAndReplicatedConsumerWithDeadConnection(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -182,7 +183,7 @@ func TestSharedAndReplicatedConsumerWithDeadConnection(t *testing.T) {
 func TestSharedConsumerAddInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -205,7 +206,7 @@ func TestSharedConsumerAddInstances(t *testing.T) {
 func TestReplicatedConsumerAddInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -228,7 +229,7 @@ func TestReplicatedConsumerAddInstances(t *testing.T) {
 func TestSharedAndReplicatedConsumerAddInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -260,7 +261,7 @@ func TestSharedAndReplicatedConsumerAddInstances(t *testing.T) {
 func TestSharedConsumerRemoveInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -283,7 +284,7 @@ func TestSharedConsumerRemoveInstances(t *testing.T) {
 func TestReplicatedConsumerRemoveInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -306,7 +307,7 @@ func TestReplicatedConsumerRemoveInstances(t *testing.T) {
 func TestSharedAndReplicatedConsumerRemoveInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -338,7 +339,7 @@ func TestSharedAndReplicatedConsumerRemoveInstances(t *testing.T) {
 func TestSharedConsumerReplaceInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -361,7 +362,7 @@ func TestSharedConsumerReplaceInstances(t *testing.T) {
 func TestReplicatedConsumerReplaceInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
@@ -384,7 +385,7 @@ func TestReplicatedConsumerReplaceInstances(t *testing.T) {
 func TestSharedAndReplicatedConsumerReplaceInstances(t *testing.T) {
 	defer leaktest.CheckTimeout(t, 20*time.Second)()
 
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {

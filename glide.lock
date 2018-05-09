@@ -1,5 +1,5 @@
-hash: 7e103b1322fc8209945b6df7a6e4f3a1acc5e77c23f8218f5f48efd5485edda7
-updated: 2018-04-20T16:20:07.994456-04:00
+hash: 8102a314832e5b2cb64a4fe985fd16f9cb746feae2c9b799ad2a3486070ea30e
+updated: 2018-05-09T08:01:01.2815-04:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -39,7 +39,7 @@ imports:
   - services/leader/campaign
   - shard
 - name: github.com/m3db/m3x
-  version: 29bc232d9ad2e6c4a1804ccce095bb730fb1c6bc
+  version: f591af0fb913df0f2e8ecf6995d4aa406c4c13e0
   subpackages:
   - checked
   - clock
@@ -52,6 +52,11 @@ imports:
   - resource
   - retry
   - watch
+- name: github.com/stretchr/testify
+  version: 232e8563676cd15c3a36ba5e675ad4312ac4cb11
+  subpackages:
+  - assert
+  - require
 - name: github.com/uber-go/atomic
   version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
 - name: github.com/uber-go/tally
@@ -80,10 +85,5 @@ imports:
 testImports:
 - name: github.com/fortytw2/leaktest
   version: a5ef70473c97b71626b9abeda80ee92ba2a7de9e
-- name: github.com/stretchr/testify
-  version: 232e8563676cd15c3a36ba5e675ad4312ac4cb11
-  subpackages:
-  - assert
-  - require
 - name: gopkg.in/yaml.v2
   version: a83829b6f1293c91addabc89d0571c246397bbf4
