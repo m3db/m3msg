@@ -11,5 +11,6 @@ env:
     - PACKAGE=github.com/m3db/m3msg
   matrix:
     - MAKE_TARGET="test-ci-unit"
+    - MAKE_TARGET="test-integration"
     - MAKE_TARGET="metalint"
 script: "make $MAKE_TARGET"
