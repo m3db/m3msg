@@ -67,8 +67,8 @@ type op struct {
 func newTestSetup(
 	t *testing.T,
 	ctrl *gomock.Controller,
-	numberOfProducers int,
-	cscs []consumerServiceConfig,
+	numProducers int,
+	configs []consumerServiceConfig,
 ) *setup {
 	store := mem.NewStore()
 	configService := client.NewMockClient(ctrl)
@@ -83,12 +83,12 @@ func newTestSetup(
 		consumerServices     []topic.ConsumerService
 		totalConsumed        = atomic.NewInt64(0)
 	)
-	for i, csc := range cscs {
+	for i, config := range configs {
 		sid := serviceID(i)
-		consumerService := topic.NewConsumerService().SetServiceID(sid).SetConsumptionType(csc.ct)
+		consumerService := topic.NewConsumerService().SetServiceID(sid).SetConsumptionType(config.ct)
 		consumerServices = append(consumerServices, consumerService)
 		ps := testPlacementService(mem.NewStore(), sid)
-		sd.EXPECT().PlacementService(sid, gomock.Any()).Return(ps, nil).Times(numberOfProducers)
+		sd.EXPECT().PlacementService(sid, gomock.Any()).Return(ps, nil).Times(numProducers)
 		cs := testConsumerService{
 			consumed:         make(map[string]struct{}),
 			sid:              sid,
@@ -97,27 +97,26 @@ func newTestSetup(
 		}
 		testConsumerServices = append(testConsumerServices, &cs)
 		var instances []placement.Instance
-		for i := 0; i < csc.instances; i++ {
+		for i := 0; i < config.instances; i++ {
 			c := newTestConsumer(t, &cs)
 			c.consumeAndAck(totalConsumed)
 			cs.testConsumers = append(cs.testConsumers, c)
 			instances = append(instances, c.instance)
 		}
-		_, err = ps.BuildInitialPlacement(instances, numberOfShards, csc.replicas)
+		p, err := ps.BuildInitialPlacement(instances, numberOfShards, config.replicas)
 		require.NoError(t, err)
+		require.Equal(t, len(instances), p.NumInstances())
 	}
 
 	testTopic := topic.NewTopic().
 		SetName(wOpts.TopicName()).
 		SetNumberOfShards(uint32(numberOfShards)).
 		SetConsumerServices(consumerServices)
-	pb, err := topic.ToProto(testTopic)
-	require.NoError(t, err)
-	_, err = store.Set(wOpts.TopicName(), pb)
+	err = ts.CheckAndSet(wOpts.TopicName(), 0, testTopic)
 	require.NoError(t, err)
 
 	var producers []producer.Producer
-	for i := 0; i < numberOfProducers; i++ {
+	for i := 0; i < numProducers; i++ {
 		w := writer.NewWriter(wOpts)
 		b := buffer.NewBuffer(nil)
 		p := producer.NewProducer(producer.NewOptions().SetBuffer(b).SetWriter(w))
@@ -125,7 +124,7 @@ func newTestSetup(
 		producers = append(producers, p)
 	}
 	return &setup{
-		configs:          cscs,
+		configs:          configs,
 		producers:        producers,
 		consumerServices: testConsumerServices,
 		totalConsumed:    totalConsumed,
