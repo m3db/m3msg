@@ -24,7 +24,6 @@ package integration
 
 import (
 	"testing"
-	"time"
 
 	"github.com/m3db/m3msg/topic"
 	"github.com/m3db/m3x/test"
@@ -35,12 +34,17 @@ import (
 )
 
 func TestSharedConsumer(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
 	for i := 1; i <= 2; i++ {
+		ctrl := gomock.NewController(test.Reporter{t})
 		setup := newTestSetup(t, ctrl, i, []consumerServiceConfig{
 			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
 		})
@@ -50,7 +54,11 @@ func TestSharedConsumer(t *testing.T) {
 }
 
 func TestReplicatedConsumer(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -65,7 +73,11 @@ func TestReplicatedConsumer(t *testing.T) {
 }
 
 func TestSharedAndReplicatedConsumers(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -81,7 +93,11 @@ func TestSharedAndReplicatedConsumers(t *testing.T) {
 }
 
 func TestSharedConsumerWithDeadInstance(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -103,7 +119,11 @@ func TestSharedConsumerWithDeadInstance(t *testing.T) {
 }
 
 func TestSharedConsumerWithDeadConnection(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -126,7 +146,11 @@ func TestSharedConsumerWithDeadConnection(t *testing.T) {
 }
 
 func TestReplicatedConsumerWithDeadConnection(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -149,7 +173,11 @@ func TestReplicatedConsumerWithDeadConnection(t *testing.T) {
 }
 
 func TestSharedAndReplicatedConsumerWithDeadConnection(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -181,7 +209,11 @@ func TestSharedAndReplicatedConsumerWithDeadConnection(t *testing.T) {
 }
 
 func TestSharedConsumerAddInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -204,7 +236,11 @@ func TestSharedConsumerAddInstances(t *testing.T) {
 }
 
 func TestReplicatedConsumerAddInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -227,7 +263,11 @@ func TestReplicatedConsumerAddInstances(t *testing.T) {
 }
 
 func TestSharedAndReplicatedConsumerAddInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -259,7 +299,11 @@ func TestSharedAndReplicatedConsumerAddInstances(t *testing.T) {
 }
 
 func TestSharedConsumerRemoveInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -282,7 +326,11 @@ func TestSharedConsumerRemoveInstances(t *testing.T) {
 }
 
 func TestReplicatedConsumerRemoveInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -305,7 +353,11 @@ func TestReplicatedConsumerRemoveInstances(t *testing.T) {
 }
 
 func TestSharedAndReplicatedConsumerRemoveInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -337,7 +389,11 @@ func TestSharedAndReplicatedConsumerRemoveInstances(t *testing.T) {
 }
 
 func TestSharedConsumerReplaceInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -360,7 +416,11 @@ func TestSharedConsumerReplaceInstances(t *testing.T) {
 }
 
 func TestReplicatedConsumerReplaceInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
@@ -383,7 +443,11 @@ func TestReplicatedConsumerReplaceInstances(t *testing.T) {
 }
 
 func TestSharedAndReplicatedConsumerReplaceInstances(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 20*time.Second)()
+	if testing.Short() {
+		t.SkipNow() // Just skip if we're doing a short run
+	}
+
+	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
