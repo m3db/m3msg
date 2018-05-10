@@ -218,9 +218,8 @@ func (s *setup) KillConnection(t *testing.T, idx int) {
 	cs := s.consumerServices[idx]
 
 	testConsumers := cs.testConsumers
-	l := len(testConsumers)
 	require.NotEmpty(t, testConsumers)
-	c := testConsumers[l-1]
+	c := testConsumers[len(testConsumers)-1]
 	c.closeOneConsumer()
 }
 
@@ -229,9 +228,8 @@ func (s *setup) KillInstance(t *testing.T, idx int) {
 	cs := s.consumerServices[idx]
 
 	testConsumers := cs.testConsumers
-	l := len(testConsumers)
 	require.NotEmpty(t, testConsumers)
-	c := testConsumers[l-1]
+	c := testConsumers[len(testConsumers)-1]
 	c.Close()
 }
 
@@ -252,8 +250,8 @@ func (s *setup) RemoveInstance(t *testing.T, idx int) {
 	cs := s.consumerServices[idx]
 
 	testConsumers := cs.testConsumers
-	l := len(testConsumers)
 	require.NotEmpty(t, testConsumers)
+	l := len(testConsumers)
 	oldConsumer := testConsumers[l-1]
 	defer oldConsumer.Close()
 
@@ -270,8 +268,8 @@ func (s *setup) ReplaceInstance(t *testing.T, idx int) {
 	newConsumer.consumeAndAck(s.totalConsumed)
 
 	testConsumers := cs.testConsumers
-	l := len(testConsumers)
 	require.NotEmpty(t, testConsumers)
+	l := len(testConsumers)
 	oldConsumer := testConsumers[l-1]
 	defer oldConsumer.Close()
 
