@@ -72,6 +72,7 @@ func newTestSetup(
 	numProducers int,
 	configs []consumerServiceConfig,
 ) *setup {
+	log.SimpleLogger.Debugf("setting up a test with %d producers", numProducers)
 	store := mem.NewStore()
 	configService := client.NewMockClient(ctrl)
 	configService.EXPECT().Store(gomock.Any()).Return(store, nil)
@@ -86,6 +87,7 @@ func newTestSetup(
 		totalConsumed        = atomic.NewInt64(0)
 	)
 	for i, config := range configs {
+		log.SimpleLogger.Debugf("setting up a consumer service in %s mode with %d replicas", config.ct.String(), config.replicas)
 		sid := serviceID(i)
 		consumerService := topic.NewConsumerService().SetServiceID(sid).SetConsumptionType(config.ct)
 		consumerServices = append(consumerServices, consumerService)
@@ -149,7 +151,6 @@ func (s *setup) Run(
 	t *testing.T,
 	ctrl *gomock.Controller,
 ) {
-	log.SimpleLogger.Debugf("running with %d producer", len(s.producers))
 	numWritesPerProducer := msgPerShard * numberOfShards
 	mockData := make([]producer.Data, 0, numWritesPerProducer)
 	for i := 0; i < numberOfShards; i++ {

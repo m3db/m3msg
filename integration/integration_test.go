@@ -35,6 +35,7 @@ import (
 
 const (
 	maxProducers = 2
+	maxRF        = 3
 )
 
 func TestSharedConsumer(t *testing.T) {
@@ -86,12 +87,14 @@ func TestSharedAndReplicatedConsumers(t *testing.T) {
 	defer ctrl.Finish()
 
 	for i := 1; i <= maxProducers; i++ {
-		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
-		})
+		for j := 1; j <= maxRF; j++ {
+			s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
+				consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: j},
+				consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: j},
+			})
 
-		s.Run(t, ctrl)
+			s.Run(t, ctrl)
+		}
 	}
 }
 
@@ -186,28 +189,30 @@ func TestSharedAndReplicatedConsumerWithDeadConnection(t *testing.T) {
 	defer ctrl.Finish()
 
 	for i := 1; i <= maxProducers; i++ {
-		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
-		})
+		for j := 1; j <= maxRF; j++ {
+			s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
+				consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: j},
+				consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: j},
+			})
 
-		s.ScheduleOperations(
-			10,
-			func() { s.KillConnection(t, 0) },
-		)
-		s.ScheduleOperations(
-			20,
-			func() { s.KillConnection(t, 1) },
-		)
-		s.ScheduleOperations(
-			30,
-			func() { s.KillConnection(t, 0) },
-		)
-		s.ScheduleOperations(
-			40,
-			func() { s.KillConnection(t, 1) },
-		)
-		s.Run(t, ctrl)
+			s.ScheduleOperations(
+				10,
+				func() { s.KillConnection(t, 0) },
+			)
+			s.ScheduleOperations(
+				20,
+				func() { s.KillConnection(t, 1) },
+			)
+			s.ScheduleOperations(
+				30,
+				func() { s.KillConnection(t, 0) },
+			)
+			s.ScheduleOperations(
+				40,
+				func() { s.KillConnection(t, 1) },
+			)
+			s.Run(t, ctrl)
+		}
 	}
 }
 
@@ -276,28 +281,30 @@ func TestSharedAndReplicatedConsumerAddInstances(t *testing.T) {
 	defer ctrl.Finish()
 
 	for i := 1; i <= maxProducers; i++ {
-		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
-		})
+		for j := 1; j <= maxRF; j++ {
+			s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
+				consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: j},
+				consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: j},
+			})
 
-		s.ScheduleOperations(
-			10,
-			func() { s.AddInstance(t, 0) },
-		)
-		s.ScheduleOperations(
-			20,
-			func() { s.AddInstance(t, 1) },
-		)
-		s.ScheduleOperations(
-			30,
-			func() { s.AddInstance(t, 0) },
-		)
-		s.ScheduleOperations(
-			40,
-			func() { s.AddInstance(t, 1) },
-		)
-		s.Run(t, ctrl)
+			s.ScheduleOperations(
+				10,
+				func() { s.AddInstance(t, 0) },
+			)
+			s.ScheduleOperations(
+				20,
+				func() { s.AddInstance(t, 1) },
+			)
+			s.ScheduleOperations(
+				30,
+				func() { s.AddInstance(t, 0) },
+			)
+			s.ScheduleOperations(
+				40,
+				func() { s.AddInstance(t, 1) },
+			)
+			s.Run(t, ctrl)
+		}
 	}
 }
 
@@ -366,28 +373,30 @@ func TestSharedAndReplicatedConsumerRemoveInstances(t *testing.T) {
 	defer ctrl.Finish()
 
 	for i := 1; i <= maxProducers; i++ {
-		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
-		})
+		for j := 1; j <= maxRF; j++ {
+			s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
+				consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: j},
+				consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: j},
+			})
 
-		s.ScheduleOperations(
-			10,
-			func() { s.RemoveInstance(t, 0) },
-		)
-		s.ScheduleOperations(
-			20,
-			func() { s.RemoveInstance(t, 1) },
-		)
-		s.ScheduleOperations(
-			30,
-			func() { s.RemoveInstance(t, 0) },
-		)
-		s.ScheduleOperations(
-			40,
-			func() { s.RemoveInstance(t, 1) },
-		)
-		s.Run(t, ctrl)
+			s.ScheduleOperations(
+				10,
+				func() { s.RemoveInstance(t, 0) },
+			)
+			s.ScheduleOperations(
+				20,
+				func() { s.RemoveInstance(t, 1) },
+			)
+			s.ScheduleOperations(
+				30,
+				func() { s.RemoveInstance(t, 0) },
+			)
+			s.ScheduleOperations(
+				40,
+				func() { s.RemoveInstance(t, 1) },
+			)
+			s.Run(t, ctrl)
+		}
 	}
 }
 
@@ -456,27 +465,29 @@ func TestSharedAndReplicatedConsumerReplaceInstances(t *testing.T) {
 	defer ctrl.Finish()
 
 	for i := 1; i <= maxProducers; i++ {
-		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
-		})
+		for j := 1; j <= maxRF; j++ {
+			s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
+				consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: j},
+				consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: j},
+			})
 
-		s.ScheduleOperations(
-			10,
-			func() { s.ReplaceInstance(t, 0) },
-		)
-		s.ScheduleOperations(
-			20,
-			func() { s.ReplaceInstance(t, 1) },
-		)
-		s.ScheduleOperations(
-			30,
-			func() { s.ReplaceInstance(t, 0) },
-		)
-		s.ScheduleOperations(
-			40,
-			func() { s.ReplaceInstance(t, 1) },
-		)
-		s.Run(t, ctrl)
+			s.ScheduleOperations(
+				10,
+				func() { s.ReplaceInstance(t, 0) },
+			)
+			s.ScheduleOperations(
+				20,
+				func() { s.ReplaceInstance(t, 1) },
+			)
+			s.ScheduleOperations(
+				30,
+				func() { s.ReplaceInstance(t, 0) },
+			)
+			s.ScheduleOperations(
+				40,
+				func() { s.ReplaceInstance(t, 1) },
+			)
+			s.Run(t, ctrl)
+		}
 	}
 }
