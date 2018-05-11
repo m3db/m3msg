@@ -216,16 +216,16 @@ func (c *retryableConnection) connectOnce(addr string) (net.Conn, error) {
 		c.m.connectError.Inc(1)
 		return nil, err
 	}
-
+	tcpConn := conn.(*net.TCPConn)
+	if err = tcpConn.SetKeepAlive(true); err != nil {
+		c.m.setKeepAliveError.Inc(1)
+	}
 	keepAlivePeriod := c.opts.KeepAlivePeriod()
-	if keepAlivePeriod > 0 {
-		tcpConn := conn.(*net.TCPConn)
-		if err = tcpConn.SetKeepAlive(true); err != nil {
-			c.m.setKeepAliveError.Inc(1)
-		}
-		if err = tcpConn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-			c.m.setKeepAlivePeriodError.Inc(1)
-		}
+	if keepAlivePeriod <= 0 {
+		return conn, nil
+	}
+	if err = tcpConn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+		c.m.setKeepAlivePeriodError.Inc(1)
 	}
 	return conn, nil
 }

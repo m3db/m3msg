@@ -221,17 +221,17 @@ type Options interface {
 	// SetMessagePoolOptions sets the options of pool for messages.
 	SetMessagePoolOptions(value pool.ObjectPoolOptions) Options
 
-	// MessageRetryBackoff returns the backoff for retrying messages.
-	MessageRetryBackoff() time.Duration
+	// MessageRetryOptions returns the retry options for message retry.
+	MessageRetryOptions() retry.Options
 
-	// SetMessageRetryBackoff sets the backoff for retrying messages.
-	SetMessageRetryBackoff(value time.Duration) Options
+	// MessageRetryOptions returns the retry options for message retry.
+	SetMessageRetryOptions(value retry.Options) Options
 
-	// MessageRetryMaxBackoff returns the max backoff for retrying messages.
-	MessageRetryMaxBackoff() time.Duration
+	// MessageQueueScanInterval returns the interval between scanning message queue for retries.
+	MessageQueueScanInterval() time.Duration
 
-	// SetMessageRetryMaxBackoff sets the max backoff for retrying messages.
-	SetMessageRetryMaxBackoff(value time.Duration) Options
+	// SetMessageQueueScanInterval sets the interval between scanning message queue for retries.
+	SetMessageQueueScanInterval(value time.Duration) Options
 
 	// MessageRetryBatchSize returns the batch size for retry.
 	MessageRetryBatchSize() int
@@ -276,8 +276,8 @@ type writerOptions struct {
 	topicWatchInitTimeout     time.Duration
 	services                  services.Services
 	placementWatchInitTimeout time.Duration
-	messageRetryBackoff       time.Duration
-	messageRetryMaxBackoff    time.Duration
+	messageQueueScanInterval  time.Duration
+	messageRetryOpts          retry.Options
 	messagePoolOptions        pool.ObjectPoolOptions
 	messageRetryBatchSize     int
 	closeCheckInterval        time.Duration
@@ -292,7 +292,8 @@ func NewOptions() Options {
 	return &writerOptions{
 		topicWatchInitTimeout:     defaultTopicWatchInitTimeout,
 		placementWatchInitTimeout: defaultPlacementWatchInitTimeout,
-		messageRetryBackoff:       defaultMessageRetryBackoff,
+		messageQueueScanInterval:  defaultMessageRetryBackoff,
+		messageRetryOpts:          retry.NewOptions(),
 		messagePoolOptions:        pool.NewObjectPoolOptions(),
 		messageRetryBatchSize:     defaultMessageRetryBatchSize,
 		closeCheckInterval:        defaultCloseCheckInterval,
@@ -363,23 +364,23 @@ func (opts *writerOptions) SetMessagePoolOptions(value pool.ObjectPoolOptions) O
 	return &o
 }
 
-func (opts *writerOptions) MessageRetryBackoff() time.Duration {
-	return opts.messageRetryBackoff
+func (opts *writerOptions) MessageQueueScanInterval() time.Duration {
+	return opts.messageQueueScanInterval
 }
 
-func (opts *writerOptions) SetMessageRetryBackoff(value time.Duration) Options {
+func (opts *writerOptions) SetMessageQueueScanInterval(value time.Duration) Options {
 	o := *opts
-	o.messageRetryBackoff = value
+	o.messageQueueScanInterval = value
 	return &o
 }
 
-func (opts *writerOptions) MessageRetryMaxBackoff() time.Duration {
-	return opts.messageRetryMaxBackoff
+func (opts *writerOptions) MessageRetryOptions() retry.Options {
+	return opts.messageRetryOpts
 }
 
-func (opts *writerOptions) SetMessageRetryMaxBackoff(value time.Duration) Options {
+func (opts *writerOptions) SetMessageRetryOptions(value retry.Options) Options {
 	o := *opts
-	o.messageRetryMaxBackoff = value
+	o.messageRetryOpts = value
 	return &o
 }
 
