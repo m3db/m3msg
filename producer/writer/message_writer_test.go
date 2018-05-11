@@ -315,7 +315,9 @@ func TestMessageWriterRetryWriteBatch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	opts := testOptions().SetMessageRetryBatchSize(2).SetMessageQueueScanInterval(2 * time.Nanosecond)
+	opts := testOptions().SetMessageRetryBatchSize(2).SetMessageRetryOptions(
+		retry.NewOptions().SetInitialBackoff(2 * time.Nanosecond),
+	)
 	w := newMessageWriter(200, testMessagePool(opts), opts).(*messageWriterImpl)
 
 	md1 := producer.NewMockData(ctrl)
