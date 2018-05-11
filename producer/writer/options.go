@@ -33,7 +33,6 @@ import (
 
 const (
 	defaultDialTimeout               = 10 * time.Second
-	defaultKeepAlivePeriod           = 10 * time.Second
 	defaultMessageRetryBackoff       = 5 * time.Second
 	defaultPlacementWatchInitTimeout = 5 * time.Second
 	defaultTopicWatchInitTimeout     = 5 * time.Second
@@ -104,7 +103,6 @@ type connectionOptions struct {
 func NewConnectionOptions() ConnectionOptions {
 	return &connectionOptions{
 		dialTimeout:     defaultDialTimeout,
-		keepAlivePeriod: defaultKeepAlivePeriod,
 		resetDelay:      defaultConnectionResetDelay,
 		rOpts:           retry.NewOptions(),
 		writeBufferSize: defaultConnectionBufferSize,
