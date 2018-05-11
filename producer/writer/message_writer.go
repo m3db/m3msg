@@ -119,7 +119,8 @@ type messageWriterImpl struct {
 	replicatedShardID uint64
 	mPool             messagePool
 	opts              Options
-	backOffNanos      int64
+	backoffNanos      int64
+	maxBackoffNanos   int64
 
 	msgID           uint64
 	queue           *list.List
@@ -148,7 +149,8 @@ func newMessageWriter(
 		replicatedShardID: replicatedShardID,
 		mPool:             mPool,
 		opts:              opts,
-		backOffNanos:      int64(opts.MessageRetryBackoff()),
+		backoffNanos:      int64(opts.MessageRetryBackoff()),
+		maxBackoffNanos:   int64(opts.MessageRetryMaxBackoff()),
 		msgID:             0,
 		queue:             list.New(),
 		consumerWriters:   make(map[string]consumerWriter),
@@ -236,13 +238,15 @@ func (w *messageWriterImpl) write(
 
 // TODO: make retry time strategy configurable.
 func (w *messageWriterImpl) nextRetryNanos(writeTimes int64, nowNanos int64) int64 {
-	half := w.backOffNanos / 2
-	backOff := half + rand.Int63n(half)
-	retryAtNanos := nowNanos + backOff
+	half := w.backoffNanos / 2
+	backoff := half + rand.Int63n(half)
 	if writeTimes > 1 {
-		retryAtNanos += (writeTimes - 1) * w.backOffNanos
+		backoff += (writeTimes - 1) * w.backoffNanos
 	}
-	return retryAtNanos
+	if w.maxBackoffNanos > 0 && backoff > w.maxBackoffNanos {
+		backoff = w.maxBackoffNanos
+	}
+	return nowNanos + backoff
 }
 
 func (w *messageWriterImpl) Ack(meta metadata) {

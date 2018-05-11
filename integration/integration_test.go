@@ -33,6 +33,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	maxProducers = 2
+)
+
 func TestSharedConsumer(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow() // Just skip if we're doing a short run
@@ -43,13 +47,12 @@ func TestSharedConsumer(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
-		ctrl := gomock.NewController(test.Reporter{t})
-		setup := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
+	for i := 1; i <= maxProducers; i++ {
+		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
 		})
 
-		setup.Run(t, ctrl)
+		s.Run(t, ctrl)
 	}
 }
 
@@ -63,9 +66,9 @@ func TestReplicatedConsumer(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.Run(t, ctrl)
@@ -82,10 +85,10 @@ func TestSharedAndReplicatedConsumers(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.Run(t, ctrl)
@@ -102,9 +105,9 @@ func TestSharedConsumerWithDeadInstance(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
 		})
 
 		pct := 10
@@ -128,9 +131,9 @@ func TestSharedConsumerWithDeadConnection(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -155,9 +158,9 @@ func TestReplicatedConsumerWithDeadConnection(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -182,10 +185,10 @@ func TestSharedAndReplicatedConsumerWithDeadConnection(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -218,9 +221,9 @@ func TestSharedConsumerAddInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -245,9 +248,9 @@ func TestReplicatedConsumerAddInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -272,10 +275,10 @@ func TestSharedAndReplicatedConsumerAddInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -308,9 +311,9 @@ func TestSharedConsumerRemoveInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -335,9 +338,9 @@ func TestReplicatedConsumerRemoveInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -362,10 +365,10 @@ func TestSharedAndReplicatedConsumerRemoveInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -398,9 +401,9 @@ func TestSharedConsumerReplaceInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -425,9 +428,9 @@ func TestReplicatedConsumerReplaceInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(
@@ -452,10 +455,10 @@ func TestSharedAndReplicatedConsumerReplaceInstances(t *testing.T) {
 	ctrl := gomock.NewController(test.Reporter{t})
 	defer ctrl.Finish()
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= maxProducers; i++ {
 		s := newTestSetup(t, ctrl, i, []consumerServiceConfig{
-			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 2},
-			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 2},
+			consumerServiceConfig{ct: topic.Shared, instances: 5, replicas: 3},
+			consumerServiceConfig{ct: topic.Replicated, instances: 5, replicas: 3},
 		})
 
 		s.ScheduleOperations(

@@ -33,6 +33,7 @@ import (
 
 const (
 	defaultDialTimeout               = 10 * time.Second
+	defaultKeepAlivePeriod           = 10 * time.Second
 	defaultMessageRetryBackoff       = 5 * time.Second
 	defaultPlacementWatchInitTimeout = 5 * time.Second
 	defaultTopicWatchInitTimeout     = 5 * time.Second
@@ -51,6 +52,12 @@ type ConnectionOptions interface {
 
 	// SetDialTimeout sets the dial timeout.
 	SetDialTimeout(value time.Duration) ConnectionOptions
+
+	// KeepAlivePeriod returns the keepAlivePeriod.
+	KeepAlivePeriod() time.Duration
+
+	// SetKeepAlivePeriod sets the keepAlivePeriod.
+	SetKeepAlivePeriod(value time.Duration) ConnectionOptions
 
 	// ResetDelay returns the delay before resetting connection.
 	ResetDelay() time.Duration
@@ -85,6 +92,7 @@ type ConnectionOptions interface {
 
 type connectionOptions struct {
 	dialTimeout     time.Duration
+	keepAlivePeriod time.Duration
 	resetDelay      time.Duration
 	rOpts           retry.Options
 	writeBufferSize int
@@ -96,6 +104,7 @@ type connectionOptions struct {
 func NewConnectionOptions() ConnectionOptions {
 	return &connectionOptions{
 		dialTimeout:     defaultDialTimeout,
+		keepAlivePeriod: defaultKeepAlivePeriod,
 		resetDelay:      defaultConnectionResetDelay,
 		rOpts:           retry.NewOptions(),
 		writeBufferSize: defaultConnectionBufferSize,
@@ -111,6 +120,16 @@ func (opts *connectionOptions) DialTimeout() time.Duration {
 func (opts *connectionOptions) SetDialTimeout(value time.Duration) ConnectionOptions {
 	o := *opts
 	o.dialTimeout = value
+	return &o
+}
+
+func (opts *connectionOptions) KeepAlivePeriod() time.Duration {
+	return opts.keepAlivePeriod
+}
+
+func (opts *connectionOptions) SetKeepAlivePeriod(value time.Duration) ConnectionOptions {
+	o := *opts
+	o.keepAlivePeriod = value
 	return &o
 }
 
@@ -202,11 +221,17 @@ type Options interface {
 	// SetMessagePoolOptions sets the options of pool for messages.
 	SetMessagePoolOptions(value pool.ObjectPoolOptions) Options
 
-	// MessageRetryBackoff returns the backoff before retrying messages.
+	// MessageRetryBackoff returns the backoff for retrying messages.
 	MessageRetryBackoff() time.Duration
 
-	// SetMessageRetryBackoff sets the backoff before retrying messages.
+	// SetMessageRetryBackoff sets the backoff for retrying messages.
 	SetMessageRetryBackoff(value time.Duration) Options
+
+	// MessageRetryMaxBackoff returns the max backoff for retrying messages.
+	MessageRetryMaxBackoff() time.Duration
+
+	// SetMessageRetryMaxBackoff sets the max backoff for retrying messages.
+	SetMessageRetryMaxBackoff(value time.Duration) Options
 
 	// MessageRetryBatchSize returns the batch size for retry.
 	MessageRetryBatchSize() int
@@ -252,6 +277,7 @@ type writerOptions struct {
 	services                  services.Services
 	placementWatchInitTimeout time.Duration
 	messageRetryBackoff       time.Duration
+	messageRetryMaxBackoff    time.Duration
 	messagePoolOptions        pool.ObjectPoolOptions
 	messageRetryBatchSize     int
 	closeCheckInterval        time.Duration
@@ -344,6 +370,16 @@ func (opts *writerOptions) MessageRetryBackoff() time.Duration {
 func (opts *writerOptions) SetMessageRetryBackoff(value time.Duration) Options {
 	o := *opts
 	o.messageRetryBackoff = value
+	return &o
+}
+
+func (opts *writerOptions) MessageRetryMaxBackoff() time.Duration {
+	return opts.messageRetryMaxBackoff
+}
+
+func (opts *writerOptions) SetMessageRetryMaxBackoff(value time.Duration) Options {
+	o := *opts
+	o.messageRetryMaxBackoff = value
 	return &o
 }
 

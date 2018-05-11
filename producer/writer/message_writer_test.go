@@ -341,8 +341,8 @@ func TestMessageWriterRetryWriteBatch(t *testing.T) {
 }
 
 func TestNextRetryNanos(t *testing.T) {
-	backOffDuration := time.Minute
-	opts := testOptions().SetMessageRetryBackoff(backOffDuration)
+	backoffDuration := time.Minute
+	opts := testOptions().SetMessageRetryBackoff(backoffDuration).SetMessageRetryMaxBackoff(2 * backoffDuration)
 	w := newMessageWriter(200, nil, opts).(*messageWriterImpl)
 
 	nowNanos := time.Now().UnixNano()
@@ -350,12 +350,16 @@ func TestNextRetryNanos(t *testing.T) {
 	m.IncWriteTimes()
 	retryAtNanos := w.nextRetryNanos(m.WriteTimes(), nowNanos)
 	require.True(t, retryAtNanos > nowNanos)
-	require.True(t, retryAtNanos < nowNanos+int64(backOffDuration))
+	require.True(t, retryAtNanos < nowNanos+int64(backoffDuration))
 
 	m.IncWriteTimes()
 	retryAtNanos = w.nextRetryNanos(m.WriteTimes(), nowNanos)
-	require.True(t, retryAtNanos >= nowNanos+int64(backOffDuration))
-	require.True(t, retryAtNanos < nowNanos+2*int64(backOffDuration))
+	require.True(t, retryAtNanos >= nowNanos+int64(backoffDuration))
+	require.True(t, retryAtNanos < nowNanos+2*int64(backoffDuration))
+
+	m.IncWriteTimes()
+	retryAtNanos = w.nextRetryNanos(m.WriteTimes(), nowNanos)
+	require.True(t, retryAtNanos == nowNanos+2*int64(backoffDuration))
 }
 
 func TestMessageWriterCloseImmediately(t *testing.T) {

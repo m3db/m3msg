@@ -39,6 +39,7 @@ import (
 	"github.com/m3db/m3msg/producer/buffer"
 	"github.com/m3db/m3msg/producer/writer"
 	"github.com/m3db/m3msg/topic"
+	"github.com/m3db/m3x/log"
 	"github.com/m3db/m3x/pool"
 	"github.com/m3db/m3x/retry"
 
@@ -51,6 +52,7 @@ const (
 	numConcurrentMessages = 10
 	numberOfShards        = 10
 	msgPerShard           = 100
+	closeTimeout          = 60 * time.Second
 )
 
 type consumerServiceConfig struct {
@@ -147,6 +149,7 @@ func (s *setup) Run(
 	t *testing.T,
 	ctrl *gomock.Controller,
 ) {
+	log.SimpleLogger.Debugf("running with %d producer", len(s.producers))
 	numWritesPerProducer := msgPerShard * numberOfShards
 	mockData := make([]producer.Data, 0, numWritesPerProducer)
 	for i := 0; i < numberOfShards; i++ {
@@ -166,6 +169,7 @@ func (s *setup) Run(
 		num := op.progressPct * numWritesPerProducer / 100
 		ops[num] = op.fn
 	}
+	log.SimpleLogger.Debug("producing data")
 	for i := 0; i < numWritesPerProducer; i++ {
 		if fn, ok := ops[i]; ok {
 			fn()
@@ -175,7 +179,8 @@ func (s *setup) Run(
 			require.NoError(t, p.Produce(d))
 		}
 	}
-	s.CloseProducers()
+	log.SimpleLogger.Debug("produced all the data")
+	s.CloseProducers(closeTimeout)
 	s.CloseConsumers()
 	for _, cs := range s.consumerServices {
 		require.Equal(t, numWritesPerProducer, len(cs.consumed))
@@ -191,11 +196,25 @@ func (s *setup) Run(
 	}
 	expectedConsumed := expectedConsumeReplica * numWritesPerProducer * len(s.producers)
 	require.True(t, int(s.totalConsumed.Load()) >= expectedConsumed, fmt.Sprintf("expect %d, consumed %d", expectedConsumed, s.totalConsumed.Load()))
+	log.SimpleLogger.Debug("done")
 }
 
-func (s setup) CloseProducers() {
-	for _, p := range s.producers {
-		p.Close(producer.WaitForConsumption)
+func (s setup) CloseProducers(dur time.Duration) {
+	doneCh := make(chan struct{})
+
+	go func() {
+		for _, p := range s.producers {
+			p.Close(producer.WaitForConsumption)
+			log.SimpleLogger.Debug("producer closed")
+		}
+		close(doneCh)
+	}()
+
+	select {
+	case <-time.After(dur):
+		panic("taking too long to close producers")
+	case <-doneCh:
+		return
 	}
 }
 
@@ -220,6 +239,11 @@ func (s *setup) KillConnection(t *testing.T, idx int) {
 	require.NotEmpty(t, testConsumers)
 	c := testConsumers[len(testConsumers)-1]
 	c.closeOneConsumer()
+
+	log.SimpleLogger.Debugf("killed a consumer on instance: %s", c.instance.ID())
+	p, _, err := cs.placementService.Placement()
+	require.NoError(t, err)
+	log.SimpleLogger.Debugf("placement: %s", p.String())
 }
 
 func (s *setup) KillInstance(t *testing.T, idx int) {
@@ -230,6 +254,11 @@ func (s *setup) KillInstance(t *testing.T, idx int) {
 	require.NotEmpty(t, testConsumers)
 	c := testConsumers[len(testConsumers)-1]
 	c.Close()
+
+	log.SimpleLogger.Debugf("killed instance: %s", c.instance.ID())
+	p, _, err := cs.placementService.Placement()
+	require.NoError(t, err)
+	log.SimpleLogger.Debugf("placement: %s", p.String())
 }
 
 func (s *setup) AddInstance(t *testing.T, idx int) {
@@ -239,8 +268,13 @@ func (s *setup) AddInstance(t *testing.T, idx int) {
 	newConsumer := newTestConsumer(t, cs)
 	newConsumer.consumeAndAck(s.totalConsumed)
 
-	_, _, err := cs.placementService.AddInstances([]placement.Instance{newConsumer.instance})
+	p, _, err := cs.placementService.Placement()
 	require.NoError(t, err)
+	log.SimpleLogger.Debugf("old placement: %s", p.String())
+
+	p, _, err = cs.placementService.AddInstances([]placement.Instance{newConsumer.instance})
+	require.NoError(t, err)
+	log.SimpleLogger.Debugf("new placement: %s", p.String())
 	cs.testConsumers = append(cs.testConsumers, newConsumer)
 }
 
@@ -254,8 +288,13 @@ func (s *setup) RemoveInstance(t *testing.T, idx int) {
 	oldConsumer := testConsumers[l-1]
 	defer oldConsumer.Close()
 
-	_, err := cs.placementService.RemoveInstances([]string{oldConsumer.instance.ID()})
+	p, _, err := cs.placementService.Placement()
 	require.NoError(t, err)
+	log.SimpleLogger.Debugf("old placement: %s", p.String())
+
+	p, err = cs.placementService.RemoveInstances([]string{oldConsumer.instance.ID()})
+	require.NoError(t, err)
+	log.SimpleLogger.Debugf("new placement: %s", p.String())
 	cs.testConsumers = testConsumers[:l-1]
 }
 
@@ -272,11 +311,16 @@ func (s *setup) ReplaceInstance(t *testing.T, idx int) {
 	oldConsumer := testConsumers[l-1]
 	defer oldConsumer.Close()
 
-	_, _, err := cs.placementService.ReplaceInstances(
+	p, _, err := cs.placementService.Placement()
+	require.NoError(t, err)
+	log.SimpleLogger.Debugf("old placement: %s", p.String())
+
+	p, _, err = cs.placementService.ReplaceInstances(
 		[]string{oldConsumer.instance.ID()},
 		[]placement.Instance{newConsumer.instance},
 	)
 	require.NoError(t, err)
+	log.SimpleLogger.Debugf("new placement: %s", p.String())
 	cs.testConsumers[l-1] = newConsumer
 }
 
@@ -404,7 +448,10 @@ func (c *testConsumer) consumeAndAck(totalConsumed *atomic.Int64) {
 							return
 						}
 
-						ch <- msg
+						select {
+						case ch <- msg:
+						default:
+						}
 					}
 				}
 			}()
@@ -419,6 +466,7 @@ func testPlacementService(store kv.Store, sid services.ServiceID) placement.Serv
 
 func testWriterOptions() writer.Options {
 	connOpts := writer.NewConnectionOptions().
+		SetDialTimeout(500 * time.Millisecond).
 		SetRetryOptions(retry.NewOptions().SetInitialBackoff(100 * time.Millisecond).SetMaxBackoff(500 * time.Millisecond)).
 		SetWriteBufferSize(1).
 		SetResetDelay(100 * time.Millisecond)
@@ -427,7 +475,8 @@ func testWriterOptions() writer.Options {
 		SetTopicWatchInitTimeout(100 * time.Millisecond).
 		SetPlacementWatchInitTimeout(100 * time.Millisecond).
 		SetMessagePoolOptions(pool.NewObjectPoolOptions().SetSize(1)).
-		SetMessageRetryBackoff(10 * time.Millisecond).
+		SetMessageRetryBackoff(100 * time.Millisecond).
+		SetMessageRetryMaxBackoff(500 * time.Millisecond).
 		SetCloseCheckInterval(100 * time.Microsecond).
 		SetAckErrorRetryOptions(retry.NewOptions().SetInitialBackoff(100 * time.Millisecond).SetMaxBackoff(500 * time.Millisecond)).
 		SetPlacementWatchInitTimeout(100 * time.Millisecond).
@@ -436,7 +485,8 @@ func testWriterOptions() writer.Options {
 
 func testConsumerOptions() consumer.Options {
 	return consumer.NewOptions().
-		SetConnectionWriteBufferSize(1).SetAckBufferSize(1)
+		SetConnectionWriteBufferSize(1).
+		SetAckBufferSize(1)
 }
 
 func serviceID(id int) services.ServiceID {
