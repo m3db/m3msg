@@ -34,8 +34,7 @@ type ProducerConfiguration struct {
 	Writer WriterConfiguration `yaml:"writer"`
 }
 
-// NewOptions creates new producer options.
-func (c *ProducerConfiguration) NewOptions(
+func (c *ProducerConfiguration) newOptions(
 	cs client.Client,
 	iOpts instrument.Options,
 ) (producer.Options, error) {
@@ -53,7 +52,7 @@ func (c *ProducerConfiguration) NewProducer(
 	cs client.Client,
 	iOpts instrument.Options,
 ) (producer.Producer, error) {
-	opts, err := c.NewOptions(cs, iOpts)
+	opts, err := c.newOptions(cs, iOpts)
 	if err != nil {
 		return nil, err
 	}

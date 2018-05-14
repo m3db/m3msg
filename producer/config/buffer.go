@@ -48,7 +48,7 @@ func (c *BufferConfiguration) NewOptions(iOpts instrument.Options) buffer.Option
 		opts = opts.SetCloseCheckInterval(*c.CloseCheckInterval)
 	}
 	if c.OnFullStrategy != nil {
-		return opts.SetOnFullStrategy(*c.OnFullStrategy)
+		opts = opts.SetOnFullStrategy(*c.OnFullStrategy)
 	}
 	return opts.SetInstrumentOptions(iOpts)
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/m3db/m3cluster/client"
 	"github.com/m3db/m3x/instrument"
+
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -48,6 +49,6 @@ writer:
 	cs.EXPECT().Store(gomock.Any()).Return(nil, nil)
 	cs.EXPECT().Services(gomock.Any()).Return(nil, nil)
 
-	_, err := cfg.NewOptions(cs, instrument.NewOptions())
+	_, err := cfg.newOptions(cs, instrument.NewOptions())
 	require.NoError(t, err)
 }
