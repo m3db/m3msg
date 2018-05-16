@@ -50,7 +50,7 @@ import (
 const (
 	numConcurrentMessages = 10
 	numberOfShards        = 10
-	msgPerShard           = 50
+	msgPerShard           = 200
 	closeTimeout          = 30 * time.Second
 )
 
