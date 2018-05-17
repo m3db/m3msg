@@ -95,10 +95,11 @@ func (d *refCountedData) IsDroppedOrConsumed() bool {
 
 func (d *refCountedData) finalize(r producer.FinalizeReason) bool {
 	d.Lock()
-	if !d.isDroppedOrConsumed.CAS(false, true) {
+	if d.isDroppedOrConsumed.Load() {
 		d.Unlock()
 		return false
 	}
+	d.isDroppedOrConsumed.Store(true)
 	d.Unlock()
 	if d.onFinalizeFn != nil {
 		d.onFinalizeFn(d)
