@@ -65,7 +65,7 @@ type consumerWriterMetrics struct {
 	decodeError             tally.Counter
 	encodeError             tally.Counter
 	resetTooSoon            tally.Counter
-	resetConn               tally.Counter
+	resetSuccess            tally.Counter
 	resetError              tally.Counter
 	connectError            tally.Counter
 	setKeepAliveError       tally.Counter
@@ -78,8 +78,8 @@ func newConsumerWriterMetrics(scope tally.Scope) consumerWriterMetrics {
 		decodeError:             scope.Counter("decode-error"),
 		encodeError:             scope.Counter("encode-error"),
 		resetTooSoon:            scope.Counter("reset-too-soon"),
-		resetConn:               scope.Counter("reset-conn"),
-		resetError:              scope.Counter("reset-conn-error"),
+		resetSuccess:            scope.Counter("reset-success"),
+		resetError:              scope.Counter("reset-error"),
 		connectError:            scope.Counter("connect-error"),
 		setKeepAliveError:       scope.Counter("set-keep-alive-error"),
 		setKeepAlivePeriodError: scope.Counter("set-keep-alive-period-error"),
@@ -201,7 +201,6 @@ func (w *consumerWriterImpl) resetWithConnectFn(fn connectFn) error {
 		w.m.resetTooSoon.Inc(1)
 		return nil
 	}
-	w.m.resetConn.Inc(1)
 	conn, err := fn(w.addr)
 	if err != nil {
 		w.m.resetError.Inc(1)
@@ -209,6 +208,7 @@ func (w *consumerWriterImpl) resetWithConnectFn(fn connectFn) error {
 		return err
 	}
 	w.reset(conn)
+	w.m.resetSuccess.Inc(1)
 	w.logger.Infof("reconnected to %s", w.addr)
 	return nil
 }
