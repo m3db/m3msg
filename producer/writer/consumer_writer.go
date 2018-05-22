@@ -64,6 +64,7 @@ type consumerWriterMetrics struct {
 	ackError                tally.Counter
 	decodeError             tally.Counter
 	encodeError             tally.Counter
+	resetTooSoon            tally.Counter
 	resetConn               tally.Counter
 	resetError              tally.Counter
 	connectError            tally.Counter
@@ -76,6 +77,7 @@ func newConsumerWriterMetrics(scope tally.Scope) consumerWriterMetrics {
 		ackError:                scope.Counter("ack-error"),
 		decodeError:             scope.Counter("decode-error"),
 		encodeError:             scope.Counter("encode-error"),
+		resetTooSoon:            scope.Counter("reset-too-soon"),
 		resetConn:               scope.Counter("reset-conn"),
 		resetError:              scope.Counter("reset-conn-error"),
 		connectError:            scope.Counter("connect-error"),
@@ -196,6 +198,7 @@ func (w *consumerWriterImpl) resetConnectionUntilClose() {
 func (w *consumerWriterImpl) resetWithConnectFn(fn connectFn) error {
 	// Avoid resetting too frequent.
 	if w.nowFn().UnixNano() < w.lastResetNanos+int64(w.connOpts.ResetDelay()) {
+		w.m.resetTooSoon.Inc(1)
 		return nil
 	}
 	w.m.resetConn.Inc(1)
