@@ -24,7 +24,9 @@ import (
 	"net"
 
 	"github.com/m3db/m3msg/protocol/proto"
+	"github.com/m3db/m3x/instrument"
 	"github.com/m3db/m3x/pool"
+	"github.com/m3db/m3x/server"
 )
 
 // Message carries the data that needs to be processed.
@@ -34,6 +36,15 @@ type Message interface {
 
 	// Ack acks the message.
 	Ack()
+}
+
+// Consumer receives messages from a connection.
+type Consumer interface {
+	// Message waits for and returns the next message received.
+	Message() (Message, error)
+
+	// Close closes the consumer.
+	Close()
 }
 
 // Listener is a consumer listener based on a network address.
@@ -47,15 +58,6 @@ type Listener interface {
 
 	// Addr returns the listener's network address.
 	Addr() net.Addr
-}
-
-// Consumer receives messages from a connection.
-type Consumer interface {
-	// Message waits for and returns the next message received.
-	Message() (Message, error)
-
-	// Close closes the consumer.
-	Close()
 }
 
 // Options configs the consumer listener.
@@ -89,4 +91,34 @@ type Options interface {
 
 	// SetConnectionWriteBufferSize sets the buffer size.
 	SetConnectionReadBufferSize(value int) Options
+
+	// InstrumentOptions returns the instrument options.
+	InstrumentOptions() instrument.Options
+
+	// SetInstrumentOptions sets the instrument options.
+	SetInstrumentOptions(value instrument.Options) Options
+}
+
+// MessageFn processes the message.
+type MessageFn func(m Message)
+
+// ServerOptions configs the consumer server.
+type ServerOptions interface {
+	// MessageFn returns the MessageFn.
+	MessageFn() MessageFn
+
+	// SetMessageFn sets the MessageFn.
+	SetMessageFn(value MessageFn) ServerOptions
+
+	// RetryOptions returns the options for connection retrier.
+	ServerOptions() server.Options
+
+	// SetRetryOptions sets the options for connection retrier.
+	SetServerOptions(value server.Options) ServerOptions
+
+	// InstrumentOptions returns the instrument options.
+	ConsumerOptions() Options
+
+	// SetInstrumentOptions sets the instrument options.
+	SetConsumerOptions(value Options) ServerOptions
 }
