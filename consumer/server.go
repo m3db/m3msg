@@ -24,66 +24,38 @@ import (
 	"net"
 
 	"github.com/m3db/m3x/server"
-
-	"go.uber.org/atomic"
 )
 
 // NewServer creates a new server.
 func NewServer(addr string, opts ServerOptions) (server.Server, error) {
 	return server.NewServer(
 		addr,
-		newHandler(opts.MessageFn(), opts.ConsumerOptions()),
+		newHandler(opts.ConsumeFn(), opts.ConsumerOptions()),
 		opts.ServerOptions(),
 	), nil
 }
 
 type handler struct {
-	messageFn MessageFn
 	opts      Options
 	mPool     *messagePool
+	consumeFn ConsumeFn
 
-	closed *atomic.Bool
-	doneCh chan struct{}
-	m      metrics
+	m metrics
 }
 
-func newHandler(messageFn MessageFn, opts Options) *handler {
+func newHandler(consumeFn ConsumeFn, opts Options) *handler {
 	mPool := newMessagePool(opts.MessagePoolOptions())
 	mPool.Init()
 	return &handler{
-		messageFn: messageFn,
+		consumeFn: consumeFn,
 		opts:      opts,
 		mPool:     mPool,
-		closed:    atomic.NewBool(false),
-		doneCh:    make(chan struct{}),
 		m:         newConsumerMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
 }
 
 func (h *handler) Handle(conn net.Conn) {
-	if h.closed.Load() {
-		return
-	}
-	c := newConsumer(conn, h.mPool, h.opts, h.m)
-	for {
-		select {
-		case <-h.doneCh:
-			c.Close()
-			return
-		default:
-			msg, err := c.Message()
-			if err != nil {
-				c.Close()
-				return
-			}
-			h.messageFn(msg)
-		}
-	}
+	h.consumeFn(newConsumer(conn, h.mPool, h.opts, h.m))
 }
 
-func (h *handler) Close() {
-	if !h.closed.CAS(false, true) {
-		return
-	}
-	close(h.doneCh)
-}
+func (h *handler) Close() {}

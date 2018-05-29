@@ -99,16 +99,16 @@ type Options interface {
 	SetInstrumentOptions(value instrument.Options) Options
 }
 
-// MessageFn processes the message.
-type MessageFn func(m Message)
+// ConsumeFn processes the consumer.
+type ConsumeFn func(c Consumer)
 
 // ServerOptions configs the consumer server.
 type ServerOptions interface {
-	// MessageFn returns the MessageFn.
-	MessageFn() MessageFn
+	// ConsumeFn returns the ConsumeFn.
+	ConsumeFn() ConsumeFn
 
-	// SetMessageFn sets the MessageFn.
-	SetMessageFn(value MessageFn) ServerOptions
+	// SetConsumeFn sets the ConsumeFn.
+	SetConsumeFn(value ConsumeFn) ServerOptions
 
 	// RetryOptions returns the options for connection retrier.
 	ServerOptions() server.Options

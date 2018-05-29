@@ -36,19 +36,27 @@ func TestConsumerServer(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	var (
-		count = 0
-		bytes []byte
-		wg    sync.WaitGroup
+		count  = 0
+		bytes  []byte
+		closed bool
+		wg     sync.WaitGroup
 	)
-	wg.Add(1)
-	messageFn := func(m Message) {
-		count++
-		bytes = m.Bytes()
-		m.Ack()
-		wg.Done()
+	consumeFn := func(c Consumer) {
+		for {
+			count++
+			m, err := c.Message()
+			if err != nil {
+				break
+			}
+			bytes = m.Bytes()
+			m.Ack()
+			wg.Done()
+		}
+		c.Close()
+		closed = true
 	}
 
-	opts := NewServerOptions().SetConsumerOptions(testOptions()).SetMessageFn(messageFn)
+	opts := NewServerOptions().SetConsumerOptions(testOptions()).SetConsumeFn(consumeFn)
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
@@ -61,6 +69,8 @@ func TestConsumerServer(t *testing.T) {
 	require.NoError(t, err)
 
 	producer := proto.NewEncodeDecoder(conn, opts.ConsumerOptions().EncodeDecoderOptions())
+
+	wg.Add(1)
 	err = producer.Encode(&testMsg1)
 	require.NoError(t, err)
 
@@ -74,7 +84,7 @@ func TestConsumerServer(t *testing.T) {
 	require.Equal(t, testMsg1.Metadata, ack.Metadata[0])
 
 	s.Close()
-	s.Close()
+	require.True(t, closed)
 
 	_, err = net.Dial("tcp", l.Addr().String())
 	require.Error(t, err)

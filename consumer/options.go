@@ -114,7 +114,7 @@ func (opts *options) SetInstrumentOptions(value instrument.Options) Options {
 }
 
 type serverOptions struct {
-	messageFn MessageFn
+	consumeFn ConsumeFn
 	sOpts     server.Options
 	cOpts     Options
 }
@@ -126,13 +126,14 @@ func NewServerOptions() ServerOptions {
 		cOpts: NewOptions(),
 	}
 }
-func (opts *serverOptions) MessageFn() MessageFn {
-	return opts.messageFn
+
+func (opts *serverOptions) ConsumeFn() ConsumeFn {
+	return opts.consumeFn
 }
 
-func (opts *serverOptions) SetMessageFn(value MessageFn) ServerOptions {
+func (opts *serverOptions) SetConsumeFn(value ConsumeFn) ServerOptions {
 	o := *opts
-	o.messageFn = value
+	o.consumeFn = value
 	return &o
 }
 
