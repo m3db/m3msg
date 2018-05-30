@@ -60,9 +60,7 @@ func TestConsumerServer(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
-	s, err := NewServer("a", opts)
-	require.NoError(t, err)
-
+	s := NewServer("a", opts)
 	s.Serve(l)
 
 	conn, err := net.Dial("tcp", l.Addr().String())

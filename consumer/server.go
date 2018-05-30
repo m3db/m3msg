@@ -27,12 +27,12 @@ import (
 )
 
 // NewServer creates a new server.
-func NewServer(addr string, opts ServerOptions) (server.Server, error) {
+func NewServer(addr string, opts ServerOptions) server.Server {
 	return server.NewServer(
 		addr,
 		newHandler(opts.ConsumeFn(), opts.ConsumerOptions()),
 		opts.ServerOptions(),
-	), nil
+	)
 }
 
 type handler struct {
