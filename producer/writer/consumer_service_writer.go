@@ -209,12 +209,19 @@ func (w *consumerServiceWriterImpl) Init(t initType) error {
 }
 
 func (w *consumerServiceWriterImpl) process(update interface{}) error {
-	p := update.(placement.Placement)
+	var (
+		p         = update.(placement.Placement)
+		isSharded = p.IsSharded()
+	)
 	// NB(cw): Lock can be removed as w.consumerWriters is only accessed in this thread.
 	w.Lock()
 	newConsumerWriters, tobeDeleted := w.diffPlacementWithLock(p)
 	for i, sw := range w.shardWriters {
-		sw.UpdateInstances(p.InstancesForShard(uint32(i)), newConsumerWriters)
+		if isSharded {
+			sw.UpdateInstances(p.InstancesForShard(uint32(i)), newConsumerWriters)
+			continue
+		}
+		sw.UpdateInstances(p.Instances(), newConsumerWriters)
 	}
 	oldConsumerWriters := w.consumerWriters
 	w.consumerWriters = newConsumerWriters
