@@ -103,7 +103,11 @@ func newTestSetup(
 			consumerService:  consumerService,
 		}
 		testConsumerServices = append(testConsumerServices, &cs)
-		var instances []placement.Instance
+		var (
+			instances []placement.Instance
+			p         placement.Placement
+			err       error
+		)
 		for i := 0; i < config.instances; i++ {
 			c := newTestConsumer(t, &cs)
 			c.consumeAndAck(totalConsumed)
@@ -111,12 +115,10 @@ func newTestSetup(
 			instances = append(instances, c.instance)
 		}
 		if config.isSharded {
-			p, err := ps.BuildInitialPlacement(instances, numberOfShards, config.replicas)
-			require.NoError(t, err)
-			require.Equal(t, len(instances), p.NumInstances())
-			continue
+			p, err = ps.BuildInitialPlacement(instances, numberOfShards, config.replicas)
+		} else {
+			p, err = ps.BuildInitialPlacement(instances, 0, config.replicas)
 		}
-		p, err := ps.BuildInitialPlacement(instances, 0, config.replicas)
 		require.NoError(t, err)
 		require.Equal(t, len(instances), p.NumInstances())
 	}
