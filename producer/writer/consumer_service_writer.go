@@ -165,6 +165,7 @@ func (w *consumerServiceWriterImpl) Write(rm producer.RefCountedMessage) {
 	if rm.Accept(w.dataFilter) {
 		w.shardWriters[rm.Shard()].Write(rm)
 		w.m.filterAccepted.Inc(1)
+		return
 	}
 	// It is not an error if the message does not pass the filter.
 	w.m.filterNotAccepted.Inc(1)
