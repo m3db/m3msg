@@ -87,10 +87,8 @@ type messageWriterMetrics struct {
 
 func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 	return messageWriterMetrics{
-		writeSuccess: scope.Counter("write-success"),
-		oneConsumerWriteError: scope.
-			Tagged(map[string]string{"error-type": "one-consumer"}).
-			Counter("write-error"),
+		writeSuccess:          scope.Counter("write-success"),
+		oneConsumerWriteError: scope.Counter("write-error-one-consumer"),
 		allConsumersWriteError: scope.
 			Tagged(map[string]string{"error-type": "all-consumers"}).
 			Counter("write-error"),

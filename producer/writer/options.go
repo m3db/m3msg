@@ -34,9 +34,9 @@ import (
 const (
 	defaultDialTimeout               = 10 * time.Second
 	defaultKeepAlivePeriod           = time.Minute
-	defaultMessageQueueScanInterval  = 5 * time.Second
-	defaultPlacementWatchInitTimeout = 5 * time.Second
-	defaultTopicWatchInitTimeout     = 5 * time.Second
+	defaultMessageQueueScanInterval  = 2 * time.Second
+	defaultPlacementWatchInitTimeout = 2 * time.Second
+	defaultTopicWatchInitTimeout     = 2 * time.Second
 	defaultCloseCheckInterval        = 2 * time.Second
 	defaultConnectionResetDelay      = 2 * time.Second
 	defaultMessageRetryBatchSize     = 16 * 1024
