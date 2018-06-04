@@ -77,6 +77,7 @@ type messageWriterMetrics struct {
 	writeSuccess           tally.Counter
 	oneConsumerWriteError  tally.Counter
 	allConsumersWriteError tally.Counter
+	noWritersError         tally.Counter
 	writeAfterCutoff       tally.Counter
 	writeBeforeCutover     tally.Counter
 	retryBatchLatency      tally.Timer
@@ -92,6 +93,9 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 			Counter("write-error"),
 		allConsumersWriteError: scope.
 			Tagged(map[string]string{"error-type": "all-consumers"}).
+			Counter("write-error"),
+		noWritersError: scope.
+			Tagged(map[string]string{"error-type": "no-writers"}).
 			Counter("write-error"),
 		writeAfterCutoff: scope.
 			Tagged(map[string]string{"reason": "after-cutoff"}).
@@ -195,12 +199,7 @@ func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
 func (w *messageWriterImpl) write(
 	consumerWriters []consumerWriter,
 	m *message,
-	nowNanos int64,
 ) {
-	l := len(consumerWriters)
-	if l == 0 {
-		return
-	}
 	m.IncWriteTimes()
 	m.IncReads()
 	msg, isValid := m.Marshaler()
@@ -208,8 +207,12 @@ func (w *messageWriterImpl) write(
 		m.DecReads()
 		return
 	}
-	written := false
-	start := int(nowNanos) % l
+	var (
+		written  = false
+		l        = len(consumerWriters)
+		nowNanos = w.nowFn().UnixNano()
+		start    = int(nowNanos) % l
+	)
 	for i := start; i < start+l; i++ {
 		idx := i % l
 		if err := consumerWriters[idx].Write(msg); err != nil {
@@ -270,13 +273,13 @@ func (w *messageWriterImpl) retryUnacknowledgedUntilClose() {
 func (w *messageWriterImpl) retryUnacknowledged() {
 	w.RLock()
 	var (
-		l           = w.queue.Len()
-		e           = w.queue.Front()
-		toBeRetried []*message
+		l = w.queue.Len()
+		e = w.queue.Front()
 	)
 	w.RUnlock()
 	w.m.messageQueueLength.Inc(int64(l))
 	beforeRetry := w.nowFn()
+	var toBeRetried []*message
 	for e != nil {
 		now := w.nowFn()
 		nowNanos := now.UnixNano()
@@ -284,8 +287,15 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 		e, toBeRetried = w.retryBatchWithLock(e, nowNanos)
 		consumerWriters := w.consumerWriters
 		w.Unlock()
+		if len(consumerWriters) == 0 {
+			// Not expected in a healthy/valid placement.
+			w.m.noWritersError.Inc(int64(len(toBeRetried)))
+			w.m.retryBatchLatency.Record(w.nowFn().Sub(now))
+			continue
+		}
+
 		for _, m := range toBeRetried {
-			w.write(consumerWriters, m, w.nowFn().UnixNano())
+			w.write(consumerWriters, m)
 		}
 		w.m.retryBatchLatency.Record(w.nowFn().Sub(now))
 	}
