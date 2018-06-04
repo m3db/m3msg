@@ -321,13 +321,6 @@ func (w *messageWriterImpl) retryBatchWithLock(
 		}
 		next = e.Next()
 		m := e.Value.(*message)
-		if m.IsDroppedOrAcked() {
-			// Try removing the ack in case the message was dropped rather than acked.
-			w.acks.remove(m.Metadata())
-			w.queue.Remove(e)
-			w.mPool.Put(m)
-			continue
-		}
 		if w.isClosed {
 			// Simply ack the messages here to mark them as consumed for this
 			// message writer, this is useful when user removes a consumer service
@@ -340,6 +333,13 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			continue
 		}
 		if m.RetryAtNanos() >= nowNanos {
+			continue
+		}
+		if m.IsDroppedOrAcked() {
+			// Try removing the ack in case the message was dropped rather than acked.
+			w.acks.remove(m.Metadata())
+			w.queue.Remove(e)
+			w.mPool.Put(m)
 			continue
 		}
 		w.toBeRetried = append(w.toBeRetried, m)

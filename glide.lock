@@ -1,5 +1,5 @@
-hash: 62addf0874863b6c3570f37222904f22188196ed98af576fad4e584ade241b5d
-updated: 2018-06-03T19:54:21.771912-04:00
+hash: 7f1849e90d563a4003aa645baf40f1d3b4d7892ee035f00af136ed42f331e931
+updated: 2018-06-03T21:43:39.704182-04:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -13,6 +13,8 @@ imports:
   version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
   - spew
+- name: github.com/fortytw2/leaktest
+  version: a5ef70473c97b71626b9abeda80ee92ba2a7de9e
 - name: github.com/gogo/protobuf
   version: 1adfc126b41513cc696b209667c8656ea7aac67c
   subpackages:
@@ -52,7 +54,7 @@ imports:
   - services/leader/campaign
   - shard
 - name: github.com/m3db/m3x
-  version: 2f4048046997091b4a1609718bb44b377f50959f
+  version: 782ecfe679d9bb930a06b6c97f632caa1bb14494
   subpackages:
   - checked
   - clock
@@ -126,6 +128,4 @@ imports:
   - context
 - name: gopkg.in/yaml.v2
   version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
-testImports:
-- name: github.com/fortytw2/leaktest
-  version: 3677f62bb30dbf3b042c4c211245d072aa9ee075
+testImports: []
