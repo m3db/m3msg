@@ -33,10 +33,6 @@ import (
 	"github.com/uber-go/tally"
 )
 
-const (
-	defaultAckMapSize = 1024
-)
-
 type messageWriter interface {
 	// Write writes the message.
 	Write(rm producer.RefCountedMessage)
@@ -147,7 +143,7 @@ func newMessageWriter(
 		r:                 rand.New(rand.NewSource(time.Now().UnixNano())),
 		msgID:             0,
 		queue:             list.New(),
-		acks:              newAckHelper(defaultAckMapSize),
+		acks:              newAckHelper(opts.InitialAckMapSize()),
 		cutOffNanos:       0,
 		cutOverNanos:      0,
 		toBeRetried:       make([]*message, 0, opts.MessageRetryBatchSize()),
