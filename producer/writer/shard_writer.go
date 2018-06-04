@@ -55,9 +55,10 @@ func newSharedShardWriter(
 	router ackRouter,
 	mPool messagePool,
 	opts Options,
+	m messageWriterMetrics,
 ) shardWriter {
 	replicatedShardID := uint64(shard)
-	mw := newMessageWriter(replicatedShardID, mPool, opts)
+	mw := newMessageWriter(replicatedShardID, mPool, opts, m)
 	mw.Init()
 	router.Register(replicatedShardID, mw)
 	return &sharedShardWriter{
@@ -117,6 +118,7 @@ type replicatedShardWriter struct {
 	replicaID      uint32
 	messageWriters map[string]messageWriter
 	isClosed       bool
+	m              messageWriterMetrics
 }
 
 func newReplicatedShardWriter(
@@ -124,6 +126,7 @@ func newReplicatedShardWriter(
 	router ackRouter,
 	mPool messagePool,
 	opts Options,
+	m messageWriterMetrics,
 ) shardWriter {
 	return &replicatedShardWriter{
 		shard:          shard,
@@ -135,6 +138,7 @@ func newReplicatedShardWriter(
 		replicaID:      0,
 		messageWriters: make(map[string]messageWriter),
 		isClosed:       false,
+		m:              m,
 	}
 }
 
@@ -197,7 +201,7 @@ func (w *replicatedShardWriter) UpdateInstances(
 	for instance, cw := range toBeAdded {
 		replicatedShardID := uint64(w.replicaID*w.numberOfShards + w.shard)
 		w.replicaID++
-		mw := newMessageWriter(replicatedShardID, w.mPool, w.opts)
+		mw := newMessageWriter(replicatedShardID, w.mPool, w.opts, w.m)
 		mw.AddConsumerWriter(cw)
 		w.updateCutoverCutoffNanos(mw, instance)
 		mw.Init()

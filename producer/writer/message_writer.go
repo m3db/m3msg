@@ -131,6 +131,7 @@ func newMessageWriter(
 	replicatedShardID uint64,
 	mPool messagePool,
 	opts Options,
+	m messageWriterMetrics,
 ) messageWriter {
 	if opts == nil {
 		opts = NewOptions()
@@ -149,7 +150,7 @@ func newMessageWriter(
 		toBeRetried:       make([]*message, 0, opts.MessageRetryBatchSize()),
 		isClosed:          false,
 		doneCh:            make(chan struct{}),
-		m:                 newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope()),
+		m:                 m,
 		nowFn:             time.Now,
 	}
 }

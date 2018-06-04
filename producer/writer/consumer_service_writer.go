@@ -150,12 +150,13 @@ func initShardWriters(
 	opts Options,
 ) []shardWriter {
 	sws := make([]shardWriter, numberOfShards)
+	m := newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope())
 	for i := range sws {
 		switch ct {
 		case topic.Shared:
-			sws[i] = newSharedShardWriter(uint32(i), router, mPool, opts)
+			sws[i] = newSharedShardWriter(uint32(i), router, mPool, opts, m)
 		case topic.Replicated:
-			sws[i] = newReplicatedShardWriter(uint32(i), numberOfShards, router, mPool, opts)
+			sws[i] = newReplicatedShardWriter(uint32(i), numberOfShards, router, mPool, opts, m)
 		}
 	}
 	return sws
