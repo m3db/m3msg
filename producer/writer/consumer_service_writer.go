@@ -105,6 +105,7 @@ type consumerServiceWriterImpl struct {
 	consumerWriters map[string]consumerWriter
 	closed          bool
 	m               consumerServiceWriterMetrics
+	cm              consumerWriterMetrics
 
 	processFn watch.ProcessFn
 }
@@ -137,6 +138,7 @@ func newConsumerServiceWriter(
 		consumerWriters: make(map[string]consumerWriter),
 		closed:          false,
 		m:               newConsumerServiceWriterMetrics(opts.InstrumentOptions().MetricsScope()),
+		cm:              newConsumerWriterMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
 	w.processFn = w.process
 	return w, nil
@@ -252,7 +254,7 @@ func (w *consumerServiceWriterImpl) diffPlacementWithLock(newPlacement placement
 			newConsumerWriters[id] = cw
 			continue
 		}
-		cw = newConsumerWriter(instance.Endpoint(), w.router, w.opts)
+		cw = newConsumerWriter(instance.Endpoint(), w.router, w.opts, w.cm)
 		cw.Init()
 		newConsumerWriters[id] = cw
 	}

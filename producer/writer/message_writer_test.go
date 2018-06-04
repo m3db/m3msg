@@ -62,7 +62,7 @@ func TestMessageWriter(t *testing.T) {
 	a := newAckRouter(1)
 	a.Register(200, w)
 
-	cw := newConsumerWriter(addr, a, opts)
+	cw := newConsumerWriter(addr, a, opts, testConsumerWriterMetrics())
 	cw.Init()
 	defer cw.Close()
 
@@ -135,7 +135,7 @@ func TestMessageWriterRetry(t *testing.T) {
 	w.Init()
 	defer w.Close()
 
-	w.AddConsumerWriter(newConsumerWriter("bad", a, opts))
+	w.AddConsumerWriter(newConsumerWriter("bad", a, opts, testConsumerWriterMetrics()))
 	for {
 		w.RLock()
 		retried := msg.WriteTimes()
@@ -147,7 +147,7 @@ func TestMessageWriterRetry(t *testing.T) {
 	}
 	require.Equal(t, 1, w.queue.Len())
 
-	cw := newConsumerWriter(addr, a, opts)
+	cw := newConsumerWriter(addr, a, opts, testConsumerWriterMetrics())
 	cw.Init()
 	defer cw.Close()
 	w.AddConsumerWriter(cw)
