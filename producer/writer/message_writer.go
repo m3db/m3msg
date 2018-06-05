@@ -175,7 +175,6 @@ func (w *messageWriterImpl) Write(rm producer.RefCountedMessage) {
 		id:    w.msgID,
 	}
 	msg.Set(meta, rm)
-	w.acks.add(meta, msg)
 	w.queue.PushBack(msg)
 	w.Unlock()
 }
@@ -224,6 +223,7 @@ func (w *messageWriterImpl) write(
 	if !written {
 		// Could not be written to any consumer, will retry later.
 		w.m.allConsumersWriteError.Inc(1)
+		return
 	}
 	m.SetRetryAtNanos(w.nextRetryNanos(m.WriteTimes(), nowNanos))
 }
@@ -324,6 +324,9 @@ func (w *messageWriterImpl) retryBatchWithLock(
 		}
 		next = e.Next()
 		m := e.Value.(*message)
+		if m.WriteTimes() == 0 {
+			w.acks.add(m.Metadata(), m)
+		}
 		if w.isClosed {
 			// Simply ack the messages here to mark them as consumed for this
 			// message writer, this is useful when user removes a consumer service
