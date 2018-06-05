@@ -53,7 +53,8 @@ func (m *message) Set(meta metadata, rm producer.RefCountedMessage) {
 	m.ToProto(&m.pb)
 }
 
-func (m *message) Reset() {
+// Close resets the states of the message.
+func (m *message) Close() {
 	m.retryAtNanos = 0
 	m.retried = 0
 	m.isAcked.Store(false)

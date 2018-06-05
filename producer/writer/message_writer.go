@@ -335,7 +335,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// do not stay in memory forever.
 			w.Ack(m.Metadata())
 			w.queue.Remove(e)
-			m.Reset()
+			m.Close()
 			w.mPool.Put(m)
 			continue
 		}
@@ -346,7 +346,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// Try removing the ack in case the message was dropped rather than acked.
 			w.acks.remove(m.Metadata())
 			w.queue.Remove(e)
-			m.Reset()
+			m.Close()
 			w.mPool.Put(m)
 			continue
 		}

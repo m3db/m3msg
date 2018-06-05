@@ -146,12 +146,6 @@ func TestMessageWriterRetry(t *testing.T) {
 	w.AddConsumerWriter(newConsumerWriter("bad", a, opts, testConsumerWriterMetrics()))
 	require.Equal(t, 1, w.queue.Len())
 
-	cw := newConsumerWriter(addr, a, opts, testConsumerWriterMetrics())
-	cw.Init()
-	defer cw.Close()
-
-	w.AddConsumerWriter(cw)
-
 	for {
 		if !isEmptyWithLock(w.acks) {
 			break
@@ -162,6 +156,11 @@ func TestMessageWriterRetry(t *testing.T) {
 	_, ok := w.acks.m[metadata{shard: 200, id: 1}]
 	require.True(t, ok)
 
+	cw := newConsumerWriter(addr, a, opts, testConsumerWriterMetrics())
+	cw.Init()
+	defer cw.Close()
+
+	w.AddConsumerWriter(cw)
 	go func() {
 		testConsumeAndAckOnConnectionListener(t, lis, opts.EncodeDecoderOptions())
 	}()
