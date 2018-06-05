@@ -23,6 +23,7 @@ package writer
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/m3db/m3cluster/placement"
 	"github.com/m3db/m3msg/producer"
@@ -79,6 +80,7 @@ type consumerServiceWriterMetrics struct {
 	placementUpdate   tally.Counter
 	filterAccepted    tally.Counter
 	filterNotAccepted tally.Counter
+	queueSize         tally.Gauge
 }
 
 func newConsumerServiceWriterMetrics(scope tally.Scope) consumerServiceWriterMetrics {
@@ -87,6 +89,7 @@ func newConsumerServiceWriterMetrics(scope tally.Scope) consumerServiceWriterMet
 		placementError:    scope.Counter("placement-error"),
 		filterAccepted:    scope.Counter("filter-accepted"),
 		filterNotAccepted: scope.Counter("filter-not-accepted"),
+		queueSize:         scope.Gauge("queue-size"),
 	}
 }
 
@@ -104,6 +107,7 @@ type consumerServiceWriterImpl struct {
 	router          ackRouter
 	consumerWriters map[string]consumerWriter
 	closed          bool
+	doneCh          chan struct{}
 	m               consumerServiceWriterMetrics
 	cm              consumerWriterMetrics
 
@@ -137,6 +141,7 @@ func newConsumerServiceWriter(
 		router:          router,
 		consumerWriters: make(map[string]consumerWriter),
 		closed:          false,
+		doneCh:          make(chan struct{}),
 		m:               newConsumerServiceWriterMetrics(opts.InstrumentOptions().MetricsScope()),
 		cm:              newConsumerWriterMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
@@ -175,6 +180,8 @@ func (w *consumerServiceWriterImpl) Write(rm producer.RefCountedMessage) {
 }
 
 func (w *consumerServiceWriterImpl) Init(t initType) error {
+	go w.reportMetrics()
+
 	updatableFn := func() (watch.Updatable, error) {
 		return w.ps.Watch()
 	}
@@ -276,6 +283,7 @@ func (w *consumerServiceWriterImpl) Close() {
 	w.closed = true
 	w.Unlock()
 
+	close(w.doneCh)
 	// Blocks until all messages consuemd.
 	for _, sw := range w.shardWriters {
 		sw.Close()
@@ -296,4 +304,22 @@ func (w *consumerServiceWriterImpl) UnregisterFilter() {
 	w.Lock()
 	w.dataFilter = acceptAllFilter
 	w.Unlock()
+}
+
+func (w *consumerServiceWriterImpl) reportMetrics() {
+	t := time.NewTicker(w.opts.InstrumentOptions().ReportInterval())
+	defer t.Stop()
+
+	for {
+		select {
+		case <-w.doneCh:
+			return
+		case <-t.C:
+			var l int
+			for _, sw := range w.shardWriters {
+				l += sw.QueueSize()
+			}
+			w.m.queueSize.Update(float64(l))
+		}
+	}
 }

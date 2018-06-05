@@ -67,6 +67,9 @@ type messageWriter interface {
 
 	// SetCutoffNanos sets the cutoff nanoseconds.
 	SetCutoffNanos(nanos int64)
+
+	// QueueSize returns the number of messages queued in the writer.
+	QueueSize() int
 }
 
 type messageWriterMetrics struct {
@@ -435,6 +438,13 @@ func (w *messageWriterImpl) RemoveConsumerWriter(addr string) {
 	}
 	w.consumerWriters = newConsumerWriters
 	w.Unlock()
+}
+
+func (w *messageWriterImpl) QueueSize() int {
+	w.RLock()
+	l := w.queue.Len()
+	w.RUnlock()
+	return l
 }
 
 type acks struct {

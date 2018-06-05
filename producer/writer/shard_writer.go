@@ -42,6 +42,9 @@ type shardWriter interface {
 
 	// Close closes the shard writer.
 	Close()
+
+	// QueueSize returns the number of messages queued for the shard.
+	QueueSize() int
 }
 
 type sharedShardWriter struct {
@@ -103,6 +106,10 @@ func (w *sharedShardWriter) Close() {
 		return
 	}
 	w.mw.Close()
+}
+
+func (w *sharedShardWriter) QueueSize() int {
+	return w.mw.QueueSize()
 }
 
 type replicatedShardWriter struct {
@@ -251,6 +258,17 @@ func (w *replicatedShardWriter) Close() {
 	for _, mw := range w.messageWriters {
 		mw.Close()
 	}
+}
+
+func (w *replicatedShardWriter) QueueSize() int {
+	w.RLock()
+	mws := w.messageWriters
+	w.RUnlock()
+	var l int
+	for _, mw := range mws {
+		l += mw.QueueSize()
+	}
+	return l
 }
 
 func anyKeyValueInMap(
