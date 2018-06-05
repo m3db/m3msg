@@ -136,15 +136,6 @@ func TestMessageWriterRetry(t *testing.T) {
 	defer w.Close()
 
 	w.AddConsumerWriter(newConsumerWriter("bad", a, opts, testConsumerWriterMetrics()))
-	for {
-		w.RLock()
-		retried := msg.WriteTimes()
-		w.RUnlock()
-		if retried != 0 {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
 	require.Equal(t, 1, w.queue.Len())
 
 	cw := newConsumerWriter(addr, a, opts, testConsumerWriterMetrics())

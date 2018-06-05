@@ -228,9 +228,9 @@ func (w *messageWriterImpl) write(
 	m.SetRetryAtNanos(w.nextRetryNanos(m.WriteTimes(), nowNanos))
 }
 
-func (w *messageWriterImpl) nextRetryNanos(writeTimes int64, nowNanos int64) int64 {
+func (w *messageWriterImpl) nextRetryNanos(writeTimes int, nowNanos int64) int64 {
 	backoff := retry.BackoffNanos(
-		int(writeTimes),
+		writeTimes,
 		w.retryOpts.Jitter(),
 		w.retryOpts.BackoffFactor(),
 		w.retryOpts.InitialBackoff(),
