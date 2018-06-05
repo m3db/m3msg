@@ -108,6 +108,7 @@ type consumerServiceWriterImpl struct {
 	consumerWriters map[string]consumerWriter
 	closed          bool
 	doneCh          chan struct{}
+	wg              sync.WaitGroup
 	m               consumerServiceWriterMetrics
 	cm              consumerWriterMetrics
 
@@ -180,7 +181,11 @@ func (w *consumerServiceWriterImpl) Write(rm producer.RefCountedMessage) {
 }
 
 func (w *consumerServiceWriterImpl) Init(t initType) error {
-	go w.reportMetrics()
+	w.wg.Add(1)
+	go func() {
+		w.reportMetrics()
+		w.wg.Done()
+	}()
 
 	updatableFn := func() (watch.Updatable, error) {
 		return w.ps.Watch()
@@ -292,6 +297,7 @@ func (w *consumerServiceWriterImpl) Close() {
 	for _, cw := range w.consumerWriters {
 		cw.Close()
 	}
+	w.wg.Wait()
 }
 
 func (w *consumerServiceWriterImpl) RegisterFilter(filter producer.FilterFunc) {
