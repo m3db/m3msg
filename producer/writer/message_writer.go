@@ -80,7 +80,7 @@ type messageWriterMetrics struct {
 	writeAfterCutoff       tally.Counter
 	writeBeforeCutover     tally.Counter
 	retryBatchLatency      tally.Timer
-	retryLatency           tally.Timer
+	retryTotalLatency      tally.Timer
 }
 
 func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
@@ -100,7 +100,7 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 			Tagged(map[string]string{"reason": "before-cutover"}).
 			Counter("invalid-write"),
 		retryBatchLatency: scope.Timer("retry-batch-latency"),
-		retryLatency:      scope.Timer("retry-latency"),
+		retryTotalLatency: scope.Timer("retry-total-latency"),
 	}
 }
 
@@ -300,7 +300,7 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 		}
 		w.m.retryBatchLatency.Record(w.nowFn().Sub(now))
 	}
-	w.m.retryLatency.Record(w.nowFn().Sub(beforeRetry))
+	w.m.retryTotalLatency.Record(w.nowFn().Sub(beforeRetry))
 }
 
 // retryBatchWithLock iterates the message queue with a lock.
