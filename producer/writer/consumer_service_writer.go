@@ -120,7 +120,6 @@ type consumerServiceWriterImpl struct {
 func newConsumerServiceWriter(
 	cs topic.ConsumerService,
 	numShards uint32,
-	mPool messagePool,
 	opts Options,
 ) (consumerServiceWriter, error) {
 	ps, err := opts.ServiceDiscovery().PlacementService(cs.ServiceID(), nil)
@@ -132,6 +131,8 @@ func newConsumerServiceWriter(
 		return nil, errUnknownConsumptionType
 	}
 	router := newAckRouter(int(numShards))
+	mPool := newMessagePool(opts.MessagePoolOptions())
+	mPool.Init()
 	w := &consumerServiceWriterImpl{
 		cs:              cs,
 		ps:              ps,
