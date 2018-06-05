@@ -81,7 +81,6 @@ type messageWriterMetrics struct {
 	writeBeforeCutover     tally.Counter
 	retryBatchLatency      tally.Timer
 	retryLatency           tally.Timer
-	messageQueueLength     tally.Counter
 }
 
 func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
@@ -100,9 +99,8 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 		writeBeforeCutover: scope.
 			Tagged(map[string]string{"reason": "before-cutover"}).
 			Counter("invalid-write"),
-		retryBatchLatency:  scope.Timer("retry-batch-latency"),
-		retryLatency:       scope.Timer("retry-latency"),
-		messageQueueLength: scope.Counter("message-queue-length"),
+		retryBatchLatency: scope.Timer("retry-batch-latency"),
+		retryLatency:      scope.Timer("retry-latency"),
 	}
 }
 
@@ -180,7 +178,6 @@ func (w *messageWriterImpl) Write(rm producer.RefCountedMessage) {
 	w.acks.add(meta, msg)
 	w.queue.PushBack(msg)
 	w.Unlock()
-	w.m.messageQueueLength.Inc(1)
 }
 
 func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
@@ -273,19 +270,17 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 	w.RLock()
 	e := w.queue.Front()
 	w.RUnlock()
-	beforeRetry := w.nowFn()
 	var (
 		toBeRetried []*message
-		removed     int
+		beforeRetry = w.nowFn()
 	)
 	for e != nil {
 		now := w.nowFn()
 		nowNanos := now.UnixNano()
 		w.Lock()
-		e, toBeRetried, removed = w.retryBatchWithLock(e, nowNanos)
+		e, toBeRetried = w.retryBatchWithLock(e, nowNanos)
 		consumerWriters := w.consumerWriters
 		w.Unlock()
-		w.m.messageQueueLength.Inc(int64(-removed))
 		if len(consumerWriters) == 0 {
 			// Not expected in a healthy/valid placement.
 			w.m.noWritersError.Inc(int64(len(toBeRetried)))
@@ -309,11 +304,10 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 func (w *messageWriterImpl) retryBatchWithLock(
 	start *list.Element,
 	nowNanos int64,
-) (*list.Element, []*message, int) {
+) (*list.Element, []*message) {
 	var (
 		iterated int
 		next     *list.Element
-		removed  int
 	)
 	w.toBeRetried = w.toBeRetried[:0]
 	for e := start; e != nil; e = next {
@@ -332,7 +326,6 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			w.Ack(m.Metadata())
 			w.queue.Remove(e)
 			w.mPool.Put(m)
-			removed++
 			continue
 		}
 		if m.RetryAtNanos() >= nowNanos {
@@ -343,12 +336,11 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			w.acks.remove(m.Metadata())
 			w.queue.Remove(e)
 			w.mPool.Put(m)
-			removed++
 			continue
 		}
 		w.toBeRetried = append(w.toBeRetried, m)
 	}
-	return next, w.toBeRetried, removed
+	return next, w.toBeRetried
 }
 
 func (w *messageWriterImpl) Close() {
