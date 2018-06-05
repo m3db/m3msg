@@ -46,11 +46,14 @@ func newMessage() *message {
 	}
 }
 
-// Reset resets the message.
-func (m *message) Reset(meta metadata, rm producer.RefCountedMessage) {
+// Set sets the message.
+func (m *message) Set(meta metadata, rm producer.RefCountedMessage) {
 	m.meta = meta
 	m.RefCountedMessage = rm
 	m.ToProto(&m.pb)
+}
+
+func (m *message) Reset() {
 	m.retryAtNanos = 0
 	m.retried = 0
 	m.isAcked.Store(false)

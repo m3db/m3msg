@@ -174,7 +174,7 @@ func (w *messageWriterImpl) Write(rm producer.RefCountedMessage) {
 		shard: w.replicatedShardID,
 		id:    w.msgID,
 	}
-	msg.Reset(meta, rm)
+	msg.Set(meta, rm)
 	w.acks.add(meta, msg)
 	w.queue.PushBack(msg)
 	w.Unlock()
@@ -332,6 +332,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// do not stay in memory forever.
 			w.Ack(m.Metadata())
 			w.queue.Remove(e)
+			m.Reset()
 			w.mPool.Put(m)
 			continue
 		}
@@ -342,6 +343,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// Try removing the ack in case the message was dropped rather than acked.
 			w.acks.remove(m.Metadata())
 			w.queue.Remove(e)
+			m.Reset()
 			w.mPool.Put(m)
 			continue
 		}

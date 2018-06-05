@@ -220,7 +220,10 @@ func TestMessageWriterCleanupAckedMessage(t *testing.T) {
 
 	w.Write(rm)
 	acks := w.(*messageWriterImpl).acks
-	var meta metadata
+	meta := metadata{
+		id:    1,
+		shard: 2,
+	}
 	acks.Lock()
 	for m := range acks.m {
 		meta = m
@@ -251,7 +254,7 @@ func TestMessageWriterCleanupAckedMessage(t *testing.T) {
 
 	// A get will NOT allocate a new message because the old one has been returned to pool.
 	m = w.(*messageWriterImpl).mPool.Get()
-	require.True(t, m.IsDroppedOrAcked())
+	require.Equal(t, meta, m.Metadata())
 }
 
 func TestMessageWriterCutoverCutoff(t *testing.T) {
