@@ -216,6 +216,12 @@ type Options interface {
 	// SetPlacementWatchInitTimeout sets the timeout for placement watch initialization.
 	SetPlacementWatchInitTimeout(value time.Duration) Options
 
+	// EnableMessagePooling returns whether message pooling is enabled.
+	EnableMessagePooling() bool
+
+	// SetEnableMessagePooling sets whether message pooling is enabled.
+	SetEnableMessagePooling(value bool) Options
+
 	// MessagePoolOptions returns the options of pool for messages.
 	MessagePoolOptions() pool.ObjectPoolOptions
 
@@ -283,6 +289,7 @@ type writerOptions struct {
 	topicWatchInitTimeout     time.Duration
 	services                  services.Services
 	placementWatchInitTimeout time.Duration
+	enableMessagePooling      bool
 	messagePoolOptions        pool.ObjectPoolOptions
 	messageRetryOpts          retry.Options
 	messageQueueScanInterval  time.Duration
@@ -300,6 +307,7 @@ func NewOptions() Options {
 	return &writerOptions{
 		topicWatchInitTimeout:     defaultTopicWatchInitTimeout,
 		placementWatchInitTimeout: defaultPlacementWatchInitTimeout,
+		enableMessagePooling:      false,
 		messagePoolOptions:        pool.NewObjectPoolOptions(),
 		messageRetryOpts:          retry.NewOptions(),
 		messageQueueScanInterval:  defaultMessageQueueScanInterval,
@@ -360,6 +368,16 @@ func (opts *writerOptions) PlacementWatchInitTimeout() time.Duration {
 func (opts *writerOptions) SetPlacementWatchInitTimeout(value time.Duration) Options {
 	o := *opts
 	o.placementWatchInitTimeout = value
+	return &o
+}
+
+func (opts *writerOptions) EnableMessagePooling() bool {
+	return opts.enableMessagePooling
+}
+
+func (opts *writerOptions) SetEnableMessagePooling(value bool) Options {
+	o := *opts
+	o.enableMessagePooling = value
 	return &o
 }
 

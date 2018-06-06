@@ -131,12 +131,10 @@ func newConsumerServiceWriter(
 		return nil, errUnknownConsumptionType
 	}
 	router := newAckRouter(int(numShards))
-	mPool := newMessagePool(opts.MessagePoolOptions())
-	mPool.Init()
 	w := &consumerServiceWriterImpl{
 		cs:              cs,
 		ps:              ps,
-		shardWriters:    initShardWriters(router, ct, numShards, mPool, opts),
+		shardWriters:    initShardWriters(router, ct, numShards, opts),
 		opts:            opts,
 		logger:          opts.InstrumentOptions().Logger(),
 		dataFilter:      acceptAllFilter,
@@ -155,11 +153,17 @@ func initShardWriters(
 	router ackRouter,
 	ct topic.ConsumptionType,
 	numberOfShards uint32,
-	mPool messagePool,
 	opts Options,
 ) []shardWriter {
-	sws := make([]shardWriter, numberOfShards)
-	m := newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope())
+	var (
+		sws   = make([]shardWriter, numberOfShards)
+		m     = newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope())
+		mPool messagePool
+	)
+	if opts.EnableMessagePooling() {
+		mPool = newMessagePool(opts.MessagePoolOptions())
+		mPool.Init()
+	}
 	for i := range sws {
 		switch ct {
 		case topic.Shared:

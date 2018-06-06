@@ -34,7 +34,8 @@ type message struct {
 	meta         metadata
 	retryAtNanos int64
 	retried      int
-	// NB(cw) isAcked could be accessed concurrently.
+	// NB(cw) isAcked could be accessed concurrently by the background thread
+	// in message writer and acked by consumer service writers.
 	isAcked *atomic.Bool
 }
 

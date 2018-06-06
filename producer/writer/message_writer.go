@@ -157,18 +157,25 @@ func newMessageWriter(
 }
 
 func (w *messageWriterImpl) Write(rm producer.RefCountedMessage) {
-	now := w.nowFn()
-	nowNanos := now.UnixNano()
-	w.RLock()
-	isValid := w.isValidWriteWithLock(nowNanos)
-	w.RUnlock()
-	if !isValid {
+	var (
+		nowNanos = w.nowFn().UnixNano()
+		msg      *message
+	)
+	if w.mPool != nil {
+		msg = w.mPool.Get()
+	} else {
+		msg = newMessage()
+	}
+
+	w.Lock()
+	if !w.isValidWriteWithLock(nowNanos) {
+		w.Unlock()
+		if w.mPool != nil {
+			w.mPool.Put(msg)
+		}
 		return
 	}
 	rm.IncRef()
-	msg := w.mPool.Get()
-
-	w.Lock()
 	w.msgID++
 	meta := metadata{
 		shard: w.replicatedShardID,
@@ -335,8 +342,10 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// do not stay in memory forever.
 			w.Ack(m.Metadata())
 			w.queue.Remove(e)
-			m.Close()
-			w.mPool.Put(m)
+			if w.mPool != nil {
+				m.Close()
+				w.mPool.Put(m)
+			}
 			continue
 		}
 		if m.RetryAtNanos() >= nowNanos {
@@ -346,8 +355,10 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// Try removing the ack in case the message was dropped rather than acked.
 			w.acks.remove(m.Metadata())
 			w.queue.Remove(e)
-			m.Close()
-			w.mPool.Put(m)
+			if w.mPool != nil {
+				m.Close()
+				w.mPool.Put(m)
+			}
 			continue
 		}
 		w.toBeRetried = append(w.toBeRetried, m)
