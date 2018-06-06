@@ -160,7 +160,7 @@ func initShardWriters(
 		m     = newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope())
 		mPool messagePool
 	)
-	if opts.EnableMessagePooling() {
+	if opts.MessagePoolOptions() != nil {
 		mPool = newMessagePool(opts.MessagePoolOptions())
 		mPool.Init()
 	}

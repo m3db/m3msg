@@ -75,7 +75,6 @@ type WriterConfiguration struct {
 	TopicWatchInitTimeout     *time.Duration                    `yaml:"topicWatchInitTimeout"`
 	PlacementServiceOverride  services.OverrideConfiguration    `yaml:"placementServiceOverride"`
 	PlacementWatchInitTimeout *time.Duration                    `yaml:"placementWatchInitTimeout"`
-	EnableMessagePooling      *bool                             `yaml:"enableMessagePooling"`
 	MessagePool               *pool.ObjectPoolConfiguration     `yaml:"messagePool"`
 	MessageRetry              *retry.Configuration              `yaml:"messageRetry"`
 	MessageQueueScanInterval  *time.Duration                    `yaml:"messageQueueScanInterval"`
@@ -116,9 +115,6 @@ func (c *WriterConfiguration) NewOptions(
 	opts = opts.SetServiceDiscovery(sd)
 	if c.PlacementWatchInitTimeout != nil {
 		opts = opts.SetPlacementWatchInitTimeout(*c.PlacementWatchInitTimeout)
-	}
-	if c.EnableMessagePooling != nil {
-		opts = opts.SetEnableMessagePooling(*c.EnableMessagePooling)
 	}
 	if c.MessagePool != nil {
 		opts = opts.SetMessagePoolOptions(c.MessagePool.NewObjectPoolOptions(iOpts))
