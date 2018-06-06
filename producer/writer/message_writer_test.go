@@ -293,7 +293,7 @@ func TestMessageWriterRetryWithPooling(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	_, ok := w.acks.m[metadata{shard: 200, id: 1}]
+	m1, ok := w.acks.m[metadata{shard: 200, id: 1}]
 	require.True(t, ok)
 
 	cw := newConsumerWriter(addr, a, opts, testConsumerWriterMetrics())
@@ -317,6 +317,7 @@ func TestMessageWriterRetryWithPooling(t *testing.T) {
 
 	// A get will NOT allocate a new message because the old one has been returned to pool.
 	m := w.mPool.Get()
+	require.Equal(t, m1, m)
 	require.True(t, m.IsDroppedOrConsumed())
 }
 

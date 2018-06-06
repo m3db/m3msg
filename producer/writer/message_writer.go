@@ -159,20 +159,12 @@ func newMessageWriter(
 func (w *messageWriterImpl) Write(rm producer.RefCountedMessage) {
 	var (
 		nowNanos = w.nowFn().UnixNano()
-		msg      *message
+		msg      = w.newMessage()
 	)
-	if w.mPool != nil {
-		msg = w.mPool.Get()
-	} else {
-		msg = newMessage()
-	}
-
 	w.Lock()
 	if !w.isValidWriteWithLock(nowNanos) {
 		w.Unlock()
-		if w.mPool != nil {
-			w.mPool.Put(msg)
-		}
+		w.close(msg)
 		return
 	}
 	rm.IncRef()
@@ -342,10 +334,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// do not stay in memory forever.
 			w.Ack(m.Metadata())
 			w.queue.Remove(e)
-			if w.mPool != nil {
-				m.Close()
-				w.mPool.Put(m)
-			}
+			w.close(m)
 			continue
 		}
 		if m.RetryAtNanos() >= nowNanos {
@@ -355,10 +344,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// Try removing the ack in case the message was dropped rather than acked.
 			w.acks.remove(m.Metadata())
 			w.queue.Remove(e)
-			if w.mPool != nil {
-				m.Close()
-				w.mPool.Put(m)
-			}
+			w.close(m)
 			continue
 		}
 		w.toBeRetried = append(w.toBeRetried, m)
@@ -460,6 +446,20 @@ func (w *messageWriterImpl) QueueSize() int {
 	l := w.queue.Len()
 	w.RUnlock()
 	return l
+}
+
+func (w *messageWriterImpl) newMessage() *message {
+	if w.mPool != nil {
+		return w.mPool.Get()
+	}
+	return newMessage()
+}
+
+func (w *messageWriterImpl) close(m *message) {
+	if w.mPool != nil {
+		m.Close()
+		w.mPool.Put(m)
+	}
 }
 
 type acks struct {
