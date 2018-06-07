@@ -33,7 +33,11 @@ import (
 func TestBaseEncodeDecodeRoundTripWithoutPool(t *testing.T) {
 	mimicTCP := bytes.NewBuffer(nil)
 	enc := newEncoder(mimicTCP, NewBaseOptions().SetBytesPool(nil))
+	require.Equal(t, 4, len(enc.buffer))
+	require.Equal(t, 4, cap(enc.buffer))
 	dec := newDecoder(mimicTCP, NewBaseOptions().SetBytesPool(nil))
+	require.Equal(t, 4, len(dec.buffer))
+	require.Equal(t, 4, cap(dec.buffer))
 	encodeMsg := msgpb.Message{
 		Metadata: msgpb.Metadata{
 			Shard: 1,
@@ -56,7 +60,11 @@ func TestBaseEncodeDecodeRoundTripWithPool(t *testing.T) {
 	p.Init()
 	mimicTCP := bytes.NewBuffer(nil)
 	enc := newEncoder(mimicTCP, NewBaseOptions().SetBytesPool(p))
+	require.Equal(t, 8, len(enc.buffer))
+	require.Equal(t, 8, cap(enc.buffer))
 	dec := newDecoder(mimicTCP, NewBaseOptions().SetBytesPool(p))
+	require.Equal(t, 8, len(dec.buffer))
+	require.Equal(t, 8, cap(dec.buffer))
 	encodeMsg := msgpb.Message{
 		Metadata: msgpb.Metadata{
 			Shard: 1,
