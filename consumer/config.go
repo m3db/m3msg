@@ -53,5 +53,5 @@ func (c *Configuration) NewOptions(iOpts instrument.Options) Options {
 	if c.ConnectionReadBufferSize != nil {
 		opts = opts.SetConnectionReadBufferSize(*c.ConnectionReadBufferSize)
 	}
-	return opts
+	return opts.SetInstrumentOptions(iOpts)
 }
