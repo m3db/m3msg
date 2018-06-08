@@ -37,7 +37,7 @@ type Configuration struct {
 
 // NewOptions creates consumer options.
 func (c *Configuration) NewOptions(iOpts instrument.Options) Options {
-	opts := NewOptions()
+	opts := NewOptions().SetInstrumentOptions(iOpts)
 	if c.EncodeDecoder != nil {
 		opts = opts.SetEncodeDecoderOptions(c.EncodeDecoder.NewEncodeDecoderOptions(iOpts))
 	}
@@ -53,5 +53,5 @@ func (c *Configuration) NewOptions(iOpts instrument.Options) Options {
 	if c.ConnectionReadBufferSize != nil {
 		opts = opts.SetConnectionReadBufferSize(*c.ConnectionReadBufferSize)
 	}
-	return opts.SetInstrumentOptions(iOpts)
+	return opts
 }
