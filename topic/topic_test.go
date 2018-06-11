@@ -61,7 +61,7 @@ func TestTopicAddConsumer(t *testing.T) {
 			),
 	)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), cs1.String())
+	require.Contains(t, err.Error(), cs1.ServiceID().String())
 
 	tpc, err = tpc.AddConsumerService(cs2)
 	require.NoError(t, err)
