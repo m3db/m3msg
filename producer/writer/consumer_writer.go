@@ -194,7 +194,10 @@ func (w *consumerWriterImpl) resetConnectionUntilClose() {
 	for {
 		select {
 		case <-w.resetCh:
-			w.resetWithConnectFn(w.connectWithRetry)
+			err := w.resetWithConnectFn(w.connectWithRetry)
+			if err == nil {
+				w.logger.Infof("reconnected to %s", w.addr)
+			}
 		case <-w.doneCh:
 			w.conn.Close()
 			return
@@ -216,7 +219,6 @@ func (w *consumerWriterImpl) resetWithConnectFn(fn connectFn) error {
 	}
 	w.reset(conn)
 	w.m.resetSuccess.Inc(1)
-	w.logger.Infof("reconnected to %s", w.addr)
 	return nil
 }
 
