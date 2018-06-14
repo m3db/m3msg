@@ -29,6 +29,7 @@ import (
 
 	"github.com/m3db/m3msg/producer"
 	"github.com/m3db/m3x/clock"
+	"github.com/m3db/m3x/instrument"
 	"github.com/m3db/m3x/retry"
 
 	"github.com/uber-go/tally"
@@ -92,7 +93,8 @@ type messageWriterMetrics struct {
 	retryTotalLatency      tally.Timer
 }
 
-func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
+func newMessageWriterMetrics(iOpts instrument.Options) messageWriterMetrics {
+	scope := iOpts.MetricsScope()
 	return messageWriterMetrics{
 		writeSuccess:          scope.Counter("write-success"),
 		oneConsumerWriteError: scope.Counter("write-error-one-consumer"),
@@ -111,20 +113,19 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 		messageAcked:      scope.Counter("message-acked"),
 		messageClosed:     scope.Counter("message-closed"),
 		messageDropped:    scope.Counter("message-dropped"),
-		retryBatchLatency: scope.Timer("retry-batch-latency"),
-		retryTotalLatency: scope.Timer("retry-total-latency"),
+		retryBatchLatency: instrument.MustCreateSampledTimer(scope.Timer("retry-batch-latency"), iOpts.MetricsSamplingRate()),
+		retryTotalLatency: instrument.MustCreateSampledTimer(scope.Timer("retry-total-latency"), iOpts.MetricsSamplingRate()),
 	}
 }
 
 type messageWriterImpl struct {
 	sync.RWMutex
 
-	replicatedShardID   uint64
-	mPool               messagePool
-	opts                Options
-	retryOpts           retry.Options
-	r                   *rand.Rand
-	metricsSamplingRate float64
+	replicatedShardID uint64
+	mPool             messagePool
+	opts              Options
+	retryOpts         retry.Options
+	r                 *rand.Rand
 
 	msgID           uint64
 	queue           *list.List
@@ -151,22 +152,21 @@ func newMessageWriter(
 		opts = NewOptions()
 	}
 	return &messageWriterImpl{
-		replicatedShardID:   replicatedShardID,
-		mPool:               mPool,
-		opts:                opts,
-		retryOpts:           opts.MessageRetryOptions(),
-		r:                   rand.New(rand.NewSource(time.Now().UnixNano())),
-		metricsSamplingRate: opts.InstrumentOptions().MetricsSamplingRate(),
-		msgID:               0,
-		queue:               list.New(),
-		acks:                newAckHelper(opts.InitialAckMapSize()),
-		cutOffNanos:         0,
-		cutOverNanos:        0,
-		toBeRetried:         make([]*message, 0, opts.MessageRetryBatchSize()),
-		isClosed:            false,
-		doneCh:              make(chan struct{}),
-		m:                   m,
-		nowFn:               time.Now,
+		replicatedShardID: replicatedShardID,
+		mPool:             mPool,
+		opts:              opts,
+		retryOpts:         opts.MessageRetryOptions(),
+		r:                 rand.New(rand.NewSource(time.Now().UnixNano())),
+		msgID:             0,
+		queue:             list.New(),
+		acks:              newAckHelper(opts.InitialAckMapSize()),
+		cutOffNanos:       0,
+		cutOverNanos:      0,
+		toBeRetried:       make([]*message, 0, opts.MessageRetryBatchSize()),
+		isClosed:          false,
+		doneCh:            make(chan struct{}),
+		m:                 m,
+		nowFn:             time.Now,
 	}
 }
 
@@ -302,18 +302,14 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 		consumerWriters := w.consumerWriters
 		w.Unlock()
 		err := w.writeBatch(consumerWriters, toBeRetried)
-		if w.r.Float64() < w.metricsSamplingRate {
-			w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
-		}
+		w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
 		if err != nil {
 			// When we can't write to any consumer writer, skip the tick
 			// to avoid meaningless attempts, wait for next tick to retry.
 			break
 		}
 	}
-	if w.r.Float64() < w.metricsSamplingRate {
-		w.m.retryTotalLatency.Record(w.nowFn().Sub(beforeRetry))
-	}
+	w.m.retryTotalLatency.Record(w.nowFn().Sub(beforeRetry))
 }
 
 func (w *messageWriterImpl) writeBatch(

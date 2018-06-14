@@ -28,12 +28,12 @@ import (
 
 	"github.com/m3db/m3msg/producer"
 	"github.com/m3db/m3msg/producer/msg"
+	"github.com/m3db/m3x/instrument"
 	"github.com/m3db/m3x/retry"
 
 	"github.com/fortytw2/leaktest"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"github.com/uber-go/tally"
 )
 
 func TestMessageWriterWithPooling(t *testing.T) {
@@ -552,5 +552,5 @@ func testMessagePool(opts Options) messagePool {
 }
 
 func testMessageWriterMetrics() messageWriterMetrics {
-	return newMessageWriterMetrics(tally.NoopScope)
+	return newMessageWriterMetrics(instrument.NewOptions())
 }

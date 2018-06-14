@@ -95,7 +95,7 @@ func newConsumerServiceWriterMetrics(scope tally.Scope) consumerServiceWriterMet
 }
 
 type consumerServiceWriterImpl struct {
-	sync.RWMutex
+	sync.Mutex
 
 	cs           topic.ConsumerService
 	ps           placement.Service
@@ -156,7 +156,7 @@ func initShardWriters(
 ) []shardWriter {
 	var (
 		sws   = make([]shardWriter, numberOfShards)
-		m     = newMessageWriterMetrics(opts.InstrumentOptions().MetricsScope())
+		m     = newMessageWriterMetrics(opts.InstrumentOptions())
 		mPool messagePool
 	)
 	if opts.MessagePoolOptions() != nil {
