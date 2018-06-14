@@ -541,7 +541,7 @@ writer:
   messageRetry:
     initialBackoff: 20ms
     maxBackoff: 50ms
-	messageQueueScanInterval: 10ms
+  messageQueueScanInterval: 10ms
   closeCheckInterval: 200ms
   ackErrorRetry: 
     initialBackoff: 20ms
