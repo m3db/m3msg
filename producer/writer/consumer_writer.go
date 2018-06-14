@@ -205,7 +205,9 @@ func (w *consumerWriterImpl) resetConnectionUntilClose() {
 		select {
 		case <-w.resetCh:
 			// Avoid resetting too frequent.
-			if w.resetTooSoon() {
+			delay := w.resetWaitNanos()
+			if delay > 0 {
+				time.Sleep(time.Duration(delay))
 				w.m.resetTooSoon.Inc(1)
 				continue
 			}
@@ -223,8 +225,8 @@ func (w *consumerWriterImpl) resetConnectionUntilClose() {
 	}
 }
 
-func (w *consumerWriterImpl) resetTooSoon() bool {
-	return w.nowFn().UnixNano() < w.lastResetNanos+int64(w.connOpts.ResetDelay())
+func (w *consumerWriterImpl) resetWaitNanos() int64 {
+	return w.lastResetNanos + int64(w.connOpts.ResetDelay()) - w.nowFn().UnixNano()
 }
 
 func (w *consumerWriterImpl) resetWithConnectFn(fn connectFn) error {

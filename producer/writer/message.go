@@ -82,8 +82,8 @@ func (m *message) IncWriteTimes() {
 	m.retried++
 }
 
-// Acked returns true if the message has been acked.
-func (m *message) Acked() bool {
+// IsAcked returns true if the message has been acked.
+func (m *message) IsAcked() bool {
 	return m.isAcked.Load()
 }
 

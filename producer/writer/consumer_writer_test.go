@@ -100,21 +100,21 @@ func TestConsumerWriterSignalResetConnection(t *testing.T) {
 
 	w.notifyReset()
 	require.Equal(t, 1, len(w.resetCh))
-	require.True(t, w.resetTooSoon())
+	require.True(t, w.resetWaitNanos() > 0)
 
 	now := time.Now()
 	w.nowFn = func() time.Time { return now.Add(1 * time.Hour) }
 	require.Equal(t, 1, len(w.resetCh))
-	require.False(t, w.resetTooSoon())
+	require.False(t, w.resetWaitNanos() > 0)
 	require.NoError(t, w.resetWithConnectFn(w.connectFn))
 	require.Equal(t, 1, called)
 	require.Equal(t, 1, len(w.resetCh))
 
 	// Reset won't do anything as it is too soon since last reset.
-	require.True(t, w.resetTooSoon())
+	require.True(t, w.resetWaitNanos() > 0)
 
 	w.nowFn = func() time.Time { return now.Add(2 * time.Hour) }
-	require.False(t, w.resetTooSoon())
+	require.False(t, w.resetWaitNanos() > 0)
 	require.NoError(t, w.resetWithConnectFn(w.connectFn))
 	require.Equal(t, 2, called)
 }

@@ -119,11 +119,12 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 type messageWriterImpl struct {
 	sync.RWMutex
 
-	replicatedShardID uint64
-	mPool             messagePool
-	opts              Options
-	retryOpts         retry.Options
-	r                 *rand.Rand
+	replicatedShardID   uint64
+	mPool               messagePool
+	opts                Options
+	retryOpts           retry.Options
+	r                   *rand.Rand
+	metricsSamplingRate float64
 
 	msgID           uint64
 	queue           *list.List
@@ -150,21 +151,22 @@ func newMessageWriter(
 		opts = NewOptions()
 	}
 	return &messageWriterImpl{
-		replicatedShardID: replicatedShardID,
-		mPool:             mPool,
-		opts:              opts,
-		retryOpts:         opts.MessageRetryOptions(),
-		r:                 rand.New(rand.NewSource(time.Now().UnixNano())),
-		msgID:             0,
-		queue:             list.New(),
-		acks:              newAckHelper(opts.InitialAckMapSize()),
-		cutOffNanos:       0,
-		cutOverNanos:      0,
-		toBeRetried:       make([]*message, 0, opts.MessageRetryBatchSize()),
-		isClosed:          false,
-		doneCh:            make(chan struct{}),
-		m:                 m,
-		nowFn:             time.Now,
+		replicatedShardID:   replicatedShardID,
+		mPool:               mPool,
+		opts:                opts,
+		retryOpts:           opts.MessageRetryOptions(),
+		r:                   rand.New(rand.NewSource(time.Now().UnixNano())),
+		metricsSamplingRate: opts.InstrumentOptions().MetricsSamplingRate(),
+		msgID:               0,
+		queue:               list.New(),
+		acks:                newAckHelper(opts.InitialAckMapSize()),
+		cutOffNanos:         0,
+		cutOverNanos:        0,
+		toBeRetried:         make([]*message, 0, opts.MessageRetryBatchSize()),
+		isClosed:            false,
+		doneCh:              make(chan struct{}),
+		m:                   m,
+		nowFn:               time.Now,
 	}
 }
 
@@ -300,14 +302,18 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 		consumerWriters := w.consumerWriters
 		w.Unlock()
 		err := w.writeBatch(consumerWriters, toBeRetried)
-		w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
+		if w.r.Float64() < w.metricsSamplingRate {
+			w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
+		}
 		if err != nil {
 			// When we can't write to any consumer writer, skip the tick
 			// to avoid meaningless attempts, wait for next tick to retry.
 			break
 		}
 	}
-	w.m.retryTotalLatency.Record(w.nowFn().Sub(beforeRetry))
+	if w.r.Float64() < w.metricsSamplingRate {
+		w.m.retryTotalLatency.Record(w.nowFn().Sub(beforeRetry))
+	}
 }
 
 func (w *messageWriterImpl) writeBatch(
@@ -364,7 +370,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 		if m.RetryAtNanos() >= nowNanos {
 			continue
 		}
-		if m.Acked() {
+		if m.IsAcked() {
 			w.removeFromQueueWithLock(e, m)
 			w.m.messageAcked.Inc(1)
 			continue
@@ -374,7 +380,7 @@ func (w *messageWriterImpl) retryBatchWithLock(
 			// and m.IsDroppedOrConsumed() check, in which case we should not
 			// mark it as dropped, just continue and next tick will remove it
 			// as acked.
-			if m.Acked() {
+			if m.IsAcked() {
 				continue
 			}
 			w.acks.remove(m.Metadata())

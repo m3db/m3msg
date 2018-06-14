@@ -285,15 +285,15 @@ func (w *consumerServiceWriterImpl) diffPlacementWithLock(newPlacement placement
 
 func (w *consumerServiceWriterImpl) Close() {
 	w.Lock()
-	defer w.Unlock()
-
 	if w.closed {
+		w.Unlock()
 		return
 	}
-	w.logger.Infof("closing consumer service writer %s", w.cs.String())
 	w.closed = true
-	close(w.doneCh)
+	w.Unlock()
 
+	w.logger.Infof("closing consumer service writer %s", w.cs.String())
+	close(w.doneCh)
 	// Blocks until all messages consuemd.
 	var shardWriterWG sync.WaitGroup
 	for _, sw := range w.shardWriters {
