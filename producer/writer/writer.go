@@ -140,7 +140,7 @@ func (w *writer) Init() error {
 		SetProcessFn(w.processFn)
 	w.value = watch.NewValue(vOptions)
 	if err := w.value.Watch(); err != nil {
-		return fmt.Errorf("m3msg writer init error: %v", err)
+		return fmt.Errorf("writer init error: %v", err)
 	}
 	return nil
 }
@@ -189,6 +189,7 @@ func (w *writer) process(update interface{}) error {
 			continue
 		}
 		newConsumerServiceWriters[key] = csw
+		w.logger.Infof("initialized consumer service writer for %s", cs.String())
 	}
 	for key, csw := range w.consumerServiceWriters {
 		if _, ok := newConsumerServiceWriters[key]; !ok {

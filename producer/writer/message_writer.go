@@ -22,6 +22,7 @@ package writer
 
 import (
 	"container/list"
+	"errors"
 	"math/rand"
 	"sync"
 	"time"
@@ -31,6 +32,11 @@ import (
 	"github.com/m3db/m3x/retry"
 
 	"github.com/uber-go/tally"
+)
+
+var (
+	errFailAllConsumers = errors.New("could not write to any consumer")
+	errNoWriters        = errors.New("no writers")
 )
 
 type messageWriter interface {
@@ -79,6 +85,9 @@ type messageWriterMetrics struct {
 	noWritersError         tally.Counter
 	writeAfterCutoff       tally.Counter
 	writeBeforeCutover     tally.Counter
+	messageAcked           tally.Counter
+	messageClosed          tally.Counter
+	messageDropped         tally.Counter
 	retryBatchLatency      tally.Timer
 	retryTotalLatency      tally.Timer
 }
@@ -99,6 +108,9 @@ func newMessageWriterMetrics(scope tally.Scope) messageWriterMetrics {
 		writeBeforeCutover: scope.
 			Tagged(map[string]string{"reason": "before-cutover"}).
 			Counter("invalid-write"),
+		messageAcked:      scope.Counter("message-acked"),
+		messageClosed:     scope.Counter("message-closed"),
+		messageDropped:    scope.Counter("message-dropped"),
 		retryBatchLatency: scope.Timer("retry-batch-latency"),
 		retryTotalLatency: scope.Timer("retry-total-latency"),
 	}
@@ -174,6 +186,7 @@ func (w *messageWriterImpl) Write(rm producer.RefCountedMessage) {
 		id:    w.msgID,
 	}
 	msg.Set(meta, rm)
+	w.acks.add(meta, msg)
 	w.queue.PushBack(msg)
 	w.Unlock()
 }
@@ -193,13 +206,12 @@ func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
 func (w *messageWriterImpl) write(
 	consumerWriters []consumerWriter,
 	m *message,
-) {
-	m.IncWriteTimes()
+) error {
 	m.IncReads()
 	msg, isValid := m.Marshaler()
 	if !isValid {
 		m.DecReads()
-		return
+		return nil
 	}
 	var (
 		written  = false
@@ -218,13 +230,12 @@ func (w *messageWriterImpl) write(
 		break
 	}
 	m.DecReads()
-
-	if !written {
-		// Could not be written to any consumer, will retry later.
-		w.m.allConsumersWriteError.Inc(1)
-		return
+	if written {
+		return nil
 	}
-	m.SetRetryAtNanos(w.nextRetryNanos(m.WriteTimes(), nowNanos))
+	// Could not be written to any consumer, will retry later.
+	w.m.allConsumersWriteError.Inc(1)
+	return errFailAllConsumers
 }
 
 func (w *messageWriterImpl) nextRetryNanos(writeTimes int, nowNanos int64) int64 {
@@ -279,27 +290,41 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 	var (
 		toBeRetried []*message
 		beforeRetry = w.nowFn()
+		batchSize   = w.opts.MessageRetryBatchSize()
 	)
 	for e != nil {
-		now := w.nowFn()
-		nowNanos := now.UnixNano()
+		beforeBatch := w.nowFn()
+		beforeBatchNanos := beforeBatch.UnixNano()
 		w.Lock()
-		e, toBeRetried = w.retryBatchWithLock(e, nowNanos)
+		e, toBeRetried = w.retryBatchWithLock(e, beforeBatchNanos, batchSize)
 		consumerWriters := w.consumerWriters
 		w.Unlock()
-		if len(consumerWriters) == 0 {
-			// Not expected in a healthy/valid placement.
-			w.m.noWritersError.Inc(int64(len(toBeRetried)))
-			w.m.retryBatchLatency.Record(w.nowFn().Sub(now))
-			continue
+		err := w.writeBatch(consumerWriters, toBeRetried)
+		w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
+		if err != nil {
+			// When we can't write to any consumer writer, skip the tick
+			// to avoid meaningless attempts, wait for next tick to retry.
+			break
 		}
-
-		for _, m := range toBeRetried {
-			w.write(consumerWriters, m)
-		}
-		w.m.retryBatchLatency.Record(w.nowFn().Sub(now))
 	}
 	w.m.retryTotalLatency.Record(w.nowFn().Sub(beforeRetry))
+}
+
+func (w *messageWriterImpl) writeBatch(
+	consumerWriters []consumerWriter,
+	toBeRetried []*message,
+) error {
+	if len(consumerWriters) == 0 {
+		// Not expected in a healthy/valid placement.
+		w.m.noWritersError.Inc(int64(len(toBeRetried)))
+		return errNoWriters
+	}
+	for _, m := range toBeRetried {
+		if err := w.write(consumerWriters, m); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // retryBatchWithLock iterates the message queue with a lock.
@@ -310,6 +335,7 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 func (w *messageWriterImpl) retryBatchWithLock(
 	start *list.Element,
 	nowNanos int64,
+	batchSize int,
 ) (*list.Element, []*message) {
 	var (
 		iterated int
@@ -318,35 +344,46 @@ func (w *messageWriterImpl) retryBatchWithLock(
 	w.toBeRetried = w.toBeRetried[:0]
 	for e := start; e != nil; e = next {
 		iterated++
-		if iterated > w.opts.MessageRetryBatchSize() {
+		if iterated > batchSize {
 			break
 		}
 		next = e.Next()
 		m := e.Value.(*message)
-		if m.WriteTimes() == 0 {
-			w.acks.add(m.Metadata(), m)
-		}
 		if w.isClosed {
 			// Simply ack the messages here to mark them as consumed for this
 			// message writer, this is useful when user removes a consumer service
 			// during runtime that may be unhealthy to consume the messages.
 			// So that the unacked messages for the unhealthy consumer services
 			// do not stay in memory forever.
+			// NB: The message must be added to the ack map to be acked here.
 			w.Ack(m.Metadata())
-			w.queue.Remove(e)
-			w.close(m)
+			w.removeFromQueueWithLock(e, m)
+			w.m.messageClosed.Inc(1)
 			continue
 		}
 		if m.RetryAtNanos() >= nowNanos {
 			continue
 		}
-		if m.IsDroppedOrAcked() {
-			// Try removing the ack in case the message was dropped rather than acked.
-			w.acks.remove(m.Metadata())
-			w.queue.Remove(e)
-			w.close(m)
+		if m.Acked() {
+			w.removeFromQueueWithLock(e, m)
+			w.m.messageAcked.Inc(1)
 			continue
 		}
+		if m.IsDroppedOrConsumed() {
+			// There is a chance the message could be acked between m.Acked()
+			// and m.IsDroppedOrConsumed() check, in which case we should not
+			// mark it as dropped, just continue and next tick will remove it
+			// as acked.
+			if m.Acked() {
+				continue
+			}
+			w.acks.remove(m.Metadata())
+			w.removeFromQueueWithLock(e, m)
+			w.m.messageDropped.Inc(1)
+			continue
+		}
+		m.IncWriteTimes()
+		m.SetRetryAtNanos(w.nextRetryNanos(m.WriteTimes(), nowNanos))
 		w.toBeRetried = append(w.toBeRetried, m)
 	}
 	return next, w.toBeRetried
@@ -450,6 +487,11 @@ func (w *messageWriterImpl) newMessage() *message {
 		return w.mPool.Get()
 	}
 	return newMessage()
+}
+
+func (w *messageWriterImpl) removeFromQueueWithLock(e *list.Element, m *message) {
+	w.queue.Remove(e)
+	w.close(m)
 }
 
 func (w *messageWriterImpl) close(m *message) {

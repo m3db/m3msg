@@ -217,10 +217,11 @@ func (w *consumerServiceWriterImpl) Init(t initType) error {
 	}
 	if t == allowInitValueError {
 		if _, ok := err.(watch.InitValueError); ok {
+			w.logger.Warnf("invalid placement update: %v, continue to watch for placement updates", err)
 			return nil
 		}
 	}
-	return fmt.Errorf("m3msg consumer service writer init error: %v", err)
+	return fmt.Errorf("consumer service writer init error: %v", err)
 }
 
 func (w *consumerServiceWriterImpl) process(update interface{}) error {
@@ -228,6 +229,10 @@ func (w *consumerServiceWriterImpl) process(update interface{}) error {
 		p         = update.(placement.Placement)
 		isSharded = p.IsSharded()
 	)
+	// Non sharded placement is only allowed for Shared consumption type.
+	if w.cs.ConsumptionType() == topic.Replicated && !isSharded {
+		return fmt.Errorf("non-sharded placement for replicated consumer %s", w.cs.String())
+	}
 	// NB(cw): Lock can be removed as w.consumerWriters is only accessed in this thread.
 	w.Lock()
 	newConsumerWriters, tobeDeleted := w.diffPlacementWithLock(p)
@@ -280,23 +285,33 @@ func (w *consumerServiceWriterImpl) diffPlacementWithLock(newPlacement placement
 
 func (w *consumerServiceWriterImpl) Close() {
 	w.Lock()
+	defer w.Unlock()
+
 	if w.closed {
-		w.Unlock()
 		return
 	}
+	w.logger.Infof("closing consumer service writer %s", w.cs.String())
 	w.closed = true
-	w.Unlock()
-
 	close(w.doneCh)
+
 	// Blocks until all messages consuemd.
+	var shardWriterWG sync.WaitGroup
 	for _, sw := range w.shardWriters {
-		sw.Close()
+		sw := sw
+		shardWriterWG.Add(1)
+		go func() {
+			sw.Close()
+			shardWriterWG.Done()
+		}()
 	}
+	shardWriterWG.Wait()
+
 	w.value.Unwatch()
 	for _, cw := range w.consumerWriters {
 		cw.Close()
 	}
 	w.wg.Wait()
+	w.logger.Infof("closed consumer service writer %s", w.cs.String())
 }
 
 func (w *consumerServiceWriterImpl) RegisterFilter(filter producer.FilterFunc) {
