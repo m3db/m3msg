@@ -172,7 +172,7 @@ func (b *buffer) Init() {
 }
 
 func (b *buffer) cleanupUntilClose() {
-	ticker := time.NewTicker(b.opts.CloseCheckInterval())
+	ticker := time.NewTicker(b.opts.CleanupInterval())
 	defer ticker.Stop()
 
 	for {
@@ -265,7 +265,7 @@ func (b *buffer) waitUntilAllDataConsumed() {
 	if b.bufferLen() == 0 {
 		return
 	}
-	ticker := time.NewTicker(b.opts.CleanupInterval())
+	ticker := time.NewTicker(b.opts.CloseCheckInterval())
 	defer ticker.Stop()
 
 	for range ticker.C {
