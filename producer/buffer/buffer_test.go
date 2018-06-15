@@ -96,10 +96,10 @@ func TestBufferCleanupEarliest(t *testing.T) {
 	mm.EXPECT().Finalize(producer.Dropped)
 	b.dropEarliestUntilTargetWithLock(0)
 	require.Equal(t, uint64(0), b.size.Load())
-	require.Equal(t, 1, b.buffers.Len())
+	require.Equal(t, 0, b.buffers.Len())
 }
 
-func TestCleanupBatchWithLock(t *testing.T) {
+func TestCleanupBatch(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(t)
@@ -136,6 +136,61 @@ func TestCleanupBatchWithLock(t *testing.T) {
 	require.Equal(t, 2, b.bufferLen())
 }
 
+func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mm1 := producer.NewMockMessage(ctrl)
+	mm1.EXPECT().Size().Return(uint32(1)).AnyTimes()
+
+	mm2 := producer.NewMockMessage(ctrl)
+	mm2.EXPECT().Size().Return(uint32(2)).AnyTimes()
+
+	mm3 := producer.NewMockMessage(ctrl)
+	mm3.EXPECT().Size().Return(uint32(3)).AnyTimes()
+
+	b := NewBuffer(NewOptions()).(*buffer)
+	_, err := b.Add(mm1)
+	require.NoError(t, err)
+	_, err = b.Add(mm2)
+	require.NoError(t, err)
+	_, err = b.Add(mm3)
+	require.NoError(t, err)
+
+	mm1.EXPECT().Finalize(gomock.Eq(producer.Dropped))
+	b.buffers.Front().Value.(producer.RefCountedMessage).Drop()
+
+	require.Equal(t, 3, b.bufferLen())
+	e := b.cleanupBatchWithLock(b.buffers.Front(), 1)
+	// e stopped at message 2.
+	require.Equal(t, 2, int(e.Value.(producer.RefCountedMessage).Size()))
+	require.Equal(t, 2, b.bufferLen())
+	require.NotNil(t, e)
+
+	require.NotNil(t, e.Next())
+	// Mimic A new write triggered DropEarliest and removed message 2.
+	b.buffers.Remove(e)
+	require.Nil(t, e.Next())
+	require.Equal(t, 1, b.bufferLen())
+
+	// Mark message 3 as dropped, so it's ready to be removed.
+	mm3.EXPECT().Finalize(gomock.Eq(producer.Dropped))
+	b.buffers.Front().Value.(producer.RefCountedMessage).Drop()
+
+	// But next clean batch from the removed element is going to do nothing
+	// because the starting element is already removed.
+	e = b.cleanupBatchWithLock(e, 1)
+	require.Equal(t, 1, b.bufferLen())
+	require.Nil(t, e)
+
+	// Next tick will start from the beginning again and will remove
+	// the dropped message.
+	b.cleanup()
+	require.Equal(t, 0, b.bufferLen())
+}
+
 func TestBufferCleanupBackground(t *testing.T) {
 	defer leaktest.Check(t)()
 
@@ -166,6 +221,32 @@ func TestBufferCleanupBackground(t *testing.T) {
 	require.Error(t, err)
 	// Safe to close again.
 	b.Close(producer.WaitForConsumption)
+}
+
+func TestListRemoveCleanupNextAndPrev(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mm := producer.NewMockMessage(ctrl)
+	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
+
+	b := NewBuffer(NewOptions()).(*buffer)
+	_, err := b.Add(mm)
+	require.NoError(t, err)
+	_, err = b.Add(mm)
+	require.NoError(t, err)
+	_, err = b.Add(mm)
+	require.NoError(t, err)
+
+	e := b.buffers.Front().Next()
+	require.NotNil(t, e.Next())
+	require.NotNil(t, e.Prev())
+
+	b.buffers.Remove(e)
+	require.Nil(t, e.Next())
+	require.Nil(t, e.Prev())
 }
 
 func TestBufferCloseDropEverything(t *testing.T) {

@@ -150,9 +150,7 @@ func (b *buffer) dropEarliestUntilTargetWithLock(targetSize uint64) {
 	for e := b.buffers.Front(); e != nil && b.size.Load() > targetSize; e = next {
 		next = e.Next()
 		rm := e.Value.(producer.RefCountedMessage)
-		// Do not remove the list element here because the background cleanup
-		// job is done in batches and will release lock between batches.
-		// Removing list element here might cause race condition.
+		b.buffers.Remove(e)
 		if rm.IsDroppedOrConsumed() {
 			continue
 		}
@@ -188,12 +186,20 @@ func (b *buffer) cleanupUntilClose() {
 }
 
 func (b *buffer) cleanup() {
-	var (
-		e         = b.buffers.Front()
-		batchSize = b.opts.ScanBatchSize()
-	)
+	b.RLock()
+	e := b.buffers.Front()
+	b.RUnlock()
+	batchSize := b.opts.ScanBatchSize()
 	for e != nil {
 		beforeBatch := time.Now()
+		// NB: There is a chance the start element could be removed by another
+		// thread since the lock will be released between scan batch.
+		// For example when the buffer is full, a new write could trigger
+		// dropEarliest and remove elements from the front of the list.
+		// In this case, the batch starting from the removed element will do
+		// nothing and will finish the tick, which is good as this avoids the
+		// tick scanning and removing nothing because nothing is being
+		// consumed.
 		b.Lock()
 		e = b.cleanupBatchWithLock(e, batchSize)
 		b.Unlock()
