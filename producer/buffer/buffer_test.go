@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/m3db/m3msg/producer"
-	"github.com/m3db/m3x/instrument"
 
 	"github.com/fortytw2/leaktest"
 	"github.com/golang/mock/gomock"
@@ -87,15 +86,54 @@ func TestBufferCleanupEarliest(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(NewOptions())
+	b := NewBuffer(NewOptions()).(*buffer)
 	rm, err := b.Add(mm)
 	require.NoError(t, err)
 	require.Equal(t, rm.Size(), uint64(mm.Size()))
-	require.Equal(t, rm.Size(), b.(*buffer).size.Load())
+	require.Equal(t, rm.Size(), b.size.Load())
+	require.Equal(t, 1, b.buffers.Len())
 
 	mm.EXPECT().Finalize(producer.Dropped)
-	b.(*buffer).dropEarliestUntilTargetWithLock(0)
-	require.Equal(t, uint64(0), b.(*buffer).size.Load())
+	b.dropEarliestUntilTargetWithLock(0)
+	require.Equal(t, uint64(0), b.size.Load())
+	require.Equal(t, 1, b.buffers.Len())
+}
+
+func TestCleanupBatchWithLock(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mm1 := producer.NewMockMessage(ctrl)
+	mm1.EXPECT().Size().Return(uint32(1)).Times(2)
+
+	mm2 := producer.NewMockMessage(ctrl)
+	mm2.EXPECT().Size().Return(uint32(2))
+
+	mm3 := producer.NewMockMessage(ctrl)
+	mm3.EXPECT().Size().Return(uint32(3)).Times(2)
+
+	b := NewBuffer(NewOptions().SetScanBatchSize(2)).(*buffer)
+	_, err := b.Add(mm1)
+	require.NoError(t, err)
+	_, err = b.Add(mm2)
+	require.NoError(t, err)
+	_, err = b.Add(mm3)
+	require.NoError(t, err)
+
+	mm1.EXPECT().Finalize(gomock.Eq(producer.Dropped))
+	front := b.buffers.Front()
+	front.Value.(producer.RefCountedMessage).Drop()
+
+	require.Equal(t, 3, b.bufferLen())
+	e := b.cleanupBatchWithLock(front, 2)
+	require.Equal(t, 3, int(e.Value.(producer.RefCountedMessage).Size()))
+	require.Equal(t, 2, b.bufferLen())
+
+	e = b.cleanupBatchWithLock(e, 2)
+	require.Nil(t, e)
+	require.Equal(t, 2, b.bufferLen())
 }
 
 func TestBufferCleanupBackground(t *testing.T) {
@@ -107,10 +145,11 @@ func TestBufferCleanupBackground(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(NewOptions().
-		SetCleanupInterval(100 * time.Millisecond).
-		SetCloseCheckInterval(100 * time.Millisecond).
-		SetInstrumentOptions(instrument.NewOptions())).(*buffer)
+	b := NewBuffer(
+		NewOptions().
+			SetCleanupInterval(100 * time.Millisecond).
+			SetCloseCheckInterval(100 * time.Millisecond),
+	).(*buffer)
 	rm, err := b.Add(mm)
 	require.NoError(t, err)
 	require.Equal(t, rm.Size(), uint64(mm.Size()))
@@ -138,10 +177,11 @@ func TestBufferCloseDropEverything(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(NewOptions().
-		SetCleanupInterval(100 * time.Millisecond).
-		SetCloseCheckInterval(100 * time.Millisecond).
-		SetInstrumentOptions(instrument.NewOptions())).(*buffer)
+	b := NewBuffer(
+		NewOptions().
+			SetCleanupInterval(100 * time.Millisecond).
+			SetCloseCheckInterval(100 * time.Millisecond),
+	).(*buffer)
 	rm, err := b.Add(mm)
 	require.NoError(t, err)
 	require.Equal(t, rm.Size(), uint64(mm.Size()))
