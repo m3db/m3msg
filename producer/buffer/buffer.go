@@ -194,11 +194,12 @@ func (b *buffer) cleanup() {
 		beforeBatch := time.Now()
 		// NB: There is a chance the start element could be removed by another
 		// thread since the lock will be released between scan batch.
-		// For example when the buffer is full, a new write could trigger
-		// dropEarliest and remove elements from the front of the list.
+		// For example when the there is a slow/dead consumer that is not
+		// consuming anything and caused buffer to be full, a new write could
+		// trigger dropEarliest and remove elements from the front of the list.
 		// In this case, the batch starting from the removed element will do
 		// nothing and will finish the tick, which is good as this avoids the
-		// tick scanning and removing nothing because nothing is being
+		// tick repeatedly scanning and doing nothing because nothing is being
 		// consumed.
 		b.Lock()
 		e = b.cleanupBatchWithLock(e, batchSize)
