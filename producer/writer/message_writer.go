@@ -93,8 +93,10 @@ type messageWriterMetrics struct {
 	retryTotalLatency      tally.Timer
 }
 
-func newMessageWriterMetrics(iOpts instrument.Options) messageWriterMetrics {
-	scope := iOpts.MetricsScope()
+func newMessageWriterMetrics(
+	scope tally.Scope,
+	samplingRate float64,
+) messageWriterMetrics {
 	return messageWriterMetrics{
 		writeSuccess:          scope.Counter("write-success"),
 		oneConsumerWriteError: scope.Counter("write-error-one-consumer"),
@@ -113,8 +115,8 @@ func newMessageWriterMetrics(iOpts instrument.Options) messageWriterMetrics {
 		messageAcked:      scope.Counter("message-acked"),
 		messageClosed:     scope.Counter("message-closed"),
 		messageDropped:    scope.Counter("message-dropped"),
-		retryBatchLatency: instrument.MustCreateSampledTimer(scope.Timer("retry-batch-latency"), iOpts.MetricsSamplingRate()),
-		retryTotalLatency: instrument.MustCreateSampledTimer(scope.Timer("retry-total-latency"), iOpts.MetricsSamplingRate()),
+		retryBatchLatency: instrument.MustCreateSampledTimer(scope.Timer("retry-batch-latency"), samplingRate),
+		retryTotalLatency: instrument.MustCreateSampledTimer(scope.Timer("retry-total-latency"), samplingRate),
 	}
 }
 

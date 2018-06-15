@@ -155,8 +155,11 @@ func initShardWriters(
 	opts Options,
 ) []shardWriter {
 	var (
-		sws   = make([]shardWriter, numberOfShards)
-		m     = newMessageWriterMetrics(opts.InstrumentOptions())
+		sws = make([]shardWriter, numberOfShards)
+		m   = newMessageWriterMetrics(
+			opts.InstrumentOptions().MetricsScope(),
+			opts.InstrumentOptions().MetricsSamplingRate(),
+		)
 		mPool messagePool
 	)
 	if opts.MessagePoolOptions() != nil {
