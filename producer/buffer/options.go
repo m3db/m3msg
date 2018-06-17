@@ -24,23 +24,27 @@ import (
 	"time"
 
 	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3x/retry"
 )
 
 var (
-	defaultMaxBufferSize      = 100 * 1024 * 1024 // 100MB.
-	defaultMaxMessageSize     = 1 * 1024 * 1024   // 1MB.
-	defaultCleanupInterval    = 5 * time.Second
-	defaultCloseCheckInterval = time.Second
-	defaultScanBatchSize      = 256
+	defaultMaxBufferSize       = 100 * 1024 * 1024 // 100MB.
+	defaultMaxMessageSize      = 1 * 1024 * 1024   // 1MB.
+	defaultCloseCheckInterval  = time.Second
+	defaultScanBatchSize       = 16
+	defaultCleanupRetryOptions = retry.NewOptions().
+					SetInitialBackoff(10 * time.Second).
+					SetMaxBackoff(time.Minute).
+					SetForever(true)
 )
 
 type bufferOptions struct {
 	strategy           OnFullStrategy
 	maxBufferSize      int
 	maxMessageSize     int
-	cleanupInterval    time.Duration
 	closeCheckInterval time.Duration
 	scanBatchSize      int
+	rOpts              retry.Options
 	iOpts              instrument.Options
 }
 
@@ -50,9 +54,9 @@ func NewOptions() Options {
 		strategy:           DropEarliest,
 		maxBufferSize:      defaultMaxBufferSize,
 		maxMessageSize:     defaultMaxMessageSize,
-		cleanupInterval:    defaultCleanupInterval,
 		closeCheckInterval: defaultCloseCheckInterval,
 		scanBatchSize:      defaultScanBatchSize,
+		rOpts:              defaultCleanupRetryOptions,
 		iOpts:              instrument.NewOptions(),
 	}
 }
@@ -87,16 +91,6 @@ func (opts *bufferOptions) SetMaxBufferSize(value int) Options {
 	return &o
 }
 
-func (opts *bufferOptions) CleanupInterval() time.Duration {
-	return opts.cleanupInterval
-}
-
-func (opts *bufferOptions) SetCleanupInterval(value time.Duration) Options {
-	o := *opts
-	o.cleanupInterval = value
-	return &o
-}
-
 func (opts *bufferOptions) CloseCheckInterval() time.Duration {
 	return opts.closeCheckInterval
 }
@@ -114,6 +108,16 @@ func (opts *bufferOptions) ScanBatchSize() int {
 func (opts *bufferOptions) SetScanBatchSize(value int) Options {
 	o := *opts
 	o.scanBatchSize = value
+	return &o
+}
+
+func (opts *bufferOptions) CleanupRetryOptions() retry.Options {
+	return opts.rOpts
+}
+
+func (opts *bufferOptions) SetCleanupRetryOptions(value retry.Options) Options {
+	o := *opts
+	o.rOpts = value
 	return &o
 }
 

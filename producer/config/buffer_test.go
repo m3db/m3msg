@@ -36,19 +36,20 @@ func TestBufferConfiguration(t *testing.T) {
 onFullStrategy: returnError
 maxBufferSize: 100
 maxMessageSize: 16
-cleanupInterval: 2s
 closeCheckInterval: 3s
 scanBatchSize: 128
+cleanupRetry:
+  initialBackoff: 2s
 `
 
 	var cfg BufferConfiguration
 	require.NoError(t, yaml.Unmarshal([]byte(str), &cfg))
 
-	bOpts := cfg.NewOptions(nil)
+	bOpts := cfg.NewOptions(instrument.NewOptions())
 	require.Equal(t, buffer.ReturnError, bOpts.OnFullStrategy())
 	require.Equal(t, 100, bOpts.MaxBufferSize())
 	require.Equal(t, 16, bOpts.MaxMessageSize())
-	require.Equal(t, 2*time.Second, bOpts.CleanupInterval())
+	require.Equal(t, 2*time.Second, bOpts.CleanupRetryOptions().InitialBackoff())
 	require.Equal(t, 3*time.Second, bOpts.CloseCheckInterval())
 	require.Equal(t, 128, bOpts.ScanBatchSize())
 }

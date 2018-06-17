@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/m3db/m3msg/producer"
+	"github.com/m3db/m3x/retry"
 
 	"github.com/fortytw2/leaktest"
 	"github.com/golang/mock/gomock"
@@ -38,7 +39,7 @@ func TestBuffer(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(nil)
+	b := NewBuffer(testOptions())
 	require.Equal(t, 0, int(b.(*buffer).size.Load()))
 	require.Equal(t, 0, b.(*buffer).buffers.Len())
 
@@ -76,7 +77,7 @@ func TestBufferAddMessageLargerThanMaxBufferSize(t *testing.T) {
 	b := NewBuffer(NewOptions().SetMaxBufferSize(1))
 	_, err := b.Add(mm)
 	require.Error(t, err)
-	require.Equal(t, errMessageLargerThanMaxBufferSize, err)
+	require.Equal(t, errMessageTooLarge, err)
 }
 
 func TestBufferCleanupEarliest(t *testing.T) {
@@ -127,13 +128,15 @@ func TestCleanupBatch(t *testing.T) {
 	front.Value.(*producer.RefCountedMessage).Drop()
 
 	require.Equal(t, 3, b.bufferLen())
-	e := b.cleanupBatchWithLock(front, 2)
+	e, removed := b.cleanupBatchWithLock(front, 2)
 	require.Equal(t, 3, int(e.Value.(*producer.RefCountedMessage).Size()))
 	require.Equal(t, 2, b.bufferLen())
+	require.Equal(t, 1, removed)
 
-	e = b.cleanupBatchWithLock(e, 2)
+	e, removed = b.cleanupBatchWithLock(e, 2)
 	require.Nil(t, e)
 	require.Equal(t, 2, b.bufferLen())
+	require.Equal(t, 0, removed)
 }
 
 func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
@@ -158,15 +161,17 @@ func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
 	require.NoError(t, err)
 	_, err = b.Add(mm3)
 	require.NoError(t, err)
+	require.Error(t, b.cleanup())
 
 	mm1.EXPECT().Finalize(gomock.Eq(producer.Dropped))
 	b.buffers.Front().Value.(*producer.RefCountedMessage).Drop()
 
 	require.Equal(t, 3, b.bufferLen())
-	e := b.cleanupBatchWithLock(b.buffers.Front(), 1)
+	e, removed := b.cleanupBatchWithLock(b.buffers.Front(), 1)
 	// e stopped at message 2.
 	require.Equal(t, 2, int(e.Value.(*producer.RefCountedMessage).Size()))
 	require.Equal(t, 2, b.bufferLen())
+	require.Equal(t, 1, removed)
 	require.NotNil(t, e)
 
 	require.NotNil(t, e.Next())
@@ -181,13 +186,14 @@ func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
 
 	// But next clean batch from the removed element is going to do nothing
 	// because the starting element is already removed.
-	e = b.cleanupBatchWithLock(e, 1)
+	e, removed = b.cleanupBatchWithLock(e, 3)
 	require.Equal(t, 1, b.bufferLen())
+	require.Equal(t, 0, removed)
 	require.Nil(t, e)
 
 	// Next tick will start from the beginning again and will remove
 	// the dropped message.
-	b.cleanup()
+	require.NoError(t, b.cleanup())
 	require.Equal(t, 0, b.bufferLen())
 }
 
@@ -200,11 +206,7 @@ func TestBufferCleanupBackground(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(
-		NewOptions().
-			SetCleanupInterval(100 * time.Millisecond).
-			SetCloseCheckInterval(100 * time.Millisecond),
-	).(*buffer)
+	b := NewBuffer(testOptions()).(*buffer)
 	rm, err := b.Add(mm)
 	require.NoError(t, err)
 	require.Equal(t, rm.Size(), uint64(mm.Size()))
@@ -258,11 +260,7 @@ func TestBufferCloseDropEverything(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(
-		NewOptions().
-			SetCleanupInterval(100 * time.Millisecond).
-			SetCloseCheckInterval(100 * time.Millisecond),
-	).(*buffer)
+	b := NewBuffer(testOptions()).(*buffer)
 	rm, err := b.Add(mm)
 	require.NoError(t, err)
 	require.Equal(t, rm.Size(), uint64(mm.Size()))
@@ -289,7 +287,7 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(NewOptions().SetMaxBufferSize(int(3 * mm.Size())))
+	b := NewBuffer(testOptions().SetMaxBufferSize(int(3 * mm.Size())))
 	rd1, err := b.Add(mm)
 	require.NoError(t, err)
 	rd2, err := b.Add(mm)
@@ -320,10 +318,9 @@ func TestBufferReturnErrorOnFull(t *testing.T) {
 	mm := producer.NewMockMessage(ctrl)
 	mm.EXPECT().Size().Return(uint32(100)).AnyTimes()
 
-	b := NewBuffer(
-		NewOptions().
-			SetMaxBufferSize(int(3 * mm.Size())).
-			SetOnFullStrategy(ReturnError),
+	b := NewBuffer(testOptions().
+		SetMaxBufferSize(int(3 * mm.Size())).
+		SetOnFullStrategy(ReturnError),
 	)
 
 	rd1, err := b.Add(mm)
@@ -340,6 +337,11 @@ func TestBufferReturnErrorOnFull(t *testing.T) {
 	require.Error(t, err)
 }
 
+func testOptions() Options {
+	return NewOptions().
+		SetCloseCheckInterval(100 * time.Millisecond).
+		SetCleanupRetryOptions(retry.NewOptions().SetInitialBackoff(100 * time.Millisecond).SetMaxBackoff(200 * time.Millisecond))
+}
 func BenchmarkProduce(b *testing.B) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
