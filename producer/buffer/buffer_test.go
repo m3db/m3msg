@@ -107,13 +107,13 @@ func TestCleanupBatch(t *testing.T) {
 	defer ctrl.Finish()
 
 	mm1 := producer.NewMockMessage(ctrl)
-	mm1.EXPECT().Size().Return(uint32(1)).Times(2)
+	mm1.EXPECT().Size().Return(uint32(1)).AnyTimes()
 
 	mm2 := producer.NewMockMessage(ctrl)
-	mm2.EXPECT().Size().Return(uint32(2))
+	mm2.EXPECT().Size().Return(uint32(2)).AnyTimes()
 
 	mm3 := producer.NewMockMessage(ctrl)
-	mm3.EXPECT().Size().Return(uint32(3)).Times(2)
+	mm3.EXPECT().Size().Return(uint32(3)).AnyTimes()
 
 	b := NewBuffer(NewOptions().SetScanBatchSize(2)).(*buffer)
 	_, err := b.Add(mm1)
