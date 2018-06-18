@@ -38,11 +38,6 @@ const (
 )
 
 var (
-	defaultCleanupRetryOptions = retry.NewOptions().
-					SetInitialBackoff(defaultCleanupInitialBackoff).
-					SetMaxBackoff(defaultCleanupMaxBackoff).
-					SetForever(true)
-
 	errInvalidMaxMessageSize = errors.New("invalid max message size")
 )
 
@@ -64,8 +59,11 @@ func NewOptions() Options {
 		maxMessageSize:     defaultMaxMessageSize,
 		closeCheckInterval: defaultCloseCheckInterval,
 		scanBatchSize:      defaultScanBatchSize,
-		rOpts:              defaultCleanupRetryOptions,
-		iOpts:              instrument.NewOptions(),
+		rOpts: retry.NewOptions().
+			SetInitialBackoff(defaultCleanupInitialBackoff).
+			SetMaxBackoff(defaultCleanupMaxBackoff).
+			SetForever(true),
+		iOpts: instrument.NewOptions(),
 	}
 }
 
