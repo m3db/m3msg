@@ -26,6 +26,7 @@ import (
 
 	"github.com/m3db/m3msg/producer/buffer"
 	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3x/retry"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -58,5 +59,9 @@ func TestEmptyBufferConfiguration(t *testing.T) {
 	var cfg BufferConfiguration
 	require.NoError(t, yaml.Unmarshal(nil, &cfg))
 	require.Equal(t, BufferConfiguration{}, cfg)
-	require.Equal(t, buffer.NewOptions(), cfg.NewOptions(instrument.NewOptions()))
+	rOpts := retry.NewOptions()
+	require.Equal(t,
+		buffer.NewOptions().SetCleanupRetryOptions(rOpts),
+		cfg.NewOptions(instrument.NewOptions()).SetCleanupRetryOptions(rOpts),
+	)
 }
