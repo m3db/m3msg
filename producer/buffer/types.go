@@ -84,4 +84,7 @@ type Options interface {
 
 	// SetInstrumentOptions sets the instrument options.
 	SetInstrumentOptions(value instrument.Options) Options
+
+	// Validate validates the options.
+	Validate() error
 }

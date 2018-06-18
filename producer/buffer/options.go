@@ -21,21 +21,29 @@
 package buffer
 
 import (
+	"errors"
 	"time"
 
 	"github.com/m3db/m3x/instrument"
 	"github.com/m3db/m3x/retry"
 )
 
+const (
+	defaultMaxBufferSize         = 100 * 1024 * 1024 // 100MB.
+	defaultMaxMessageSize        = 1 * 1024 * 1024   // 1MB.
+	defaultCloseCheckInterval    = time.Second
+	defaultScanBatchSize         = 16
+	defaultCleanupInitialBackoff = 10 * time.Second
+	defaultCleanupMaxBackoff     = time.Minute
+)
+
 var (
-	defaultMaxBufferSize       = 100 * 1024 * 1024 // 100MB.
-	defaultMaxMessageSize      = 1 * 1024 * 1024   // 1MB.
-	defaultCloseCheckInterval  = time.Second
-	defaultScanBatchSize       = 16
 	defaultCleanupRetryOptions = retry.NewOptions().
-					SetInitialBackoff(10 * time.Second).
-					SetMaxBackoff(time.Minute).
+					SetInitialBackoff(defaultCleanupInitialBackoff).
+					SetMaxBackoff(defaultCleanupMaxBackoff).
 					SetForever(true)
+
+	errInvalidMaxMessageSize = errors.New("invalid max message size")
 )
 
 type bufferOptions struct {
@@ -129,4 +137,12 @@ func (opts *bufferOptions) SetInstrumentOptions(value instrument.Options) Option
 	o := *opts
 	o.iOpts = value
 	return &o
+}
+
+func (opts *bufferOptions) Validate() error {
+	if opts.MaxMessageSize() > opts.MaxBufferSize() {
+		// Max message size can only be as large as max buffer size.
+		return errInvalidMaxMessageSize
+	}
+	return nil
 }

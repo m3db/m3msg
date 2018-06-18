@@ -42,12 +42,13 @@ var (
 )
 
 type bufferMetrics struct {
-	messageDropped  tally.Counter
-	byteDropped     tally.Counter
-	messageTooLarge tally.Counter
-	messageBuffered tally.Gauge
-	byteBuffered    tally.Gauge
-	bufferScanBatch tally.Timer
+	messageDropped    tally.Counter
+	byteDropped       tally.Counter
+	messageTooLarge   tally.Counter
+	cleanupNoProgress tally.Counter
+	messageBuffered   tally.Gauge
+	byteBuffered      tally.Gauge
+	bufferScanBatch   tally.Timer
 }
 
 func newBufferMetrics(
@@ -55,12 +56,13 @@ func newBufferMetrics(
 	samplingRate float64,
 ) bufferMetrics {
 	return bufferMetrics{
-		messageDropped:  scope.Counter("buffer-message-dropped"),
-		byteDropped:     scope.Counter("buffer-byte-dropped"),
-		messageTooLarge: scope.Counter("message-too-large"),
-		messageBuffered: scope.Gauge("message-buffered"),
-		byteBuffered:    scope.Gauge("byte-buffered"),
-		bufferScanBatch: instrument.MustCreateSampledTimer(scope.Timer("buffer-scan-batch"), samplingRate),
+		messageDropped:    scope.Counter("buffer-message-dropped"),
+		byteDropped:       scope.Counter("buffer-byte-dropped"),
+		messageTooLarge:   scope.Counter("message-too-large"),
+		cleanupNoProgress: scope.Counter("cleanup-no-progress"),
+		messageBuffered:   scope.Gauge("message-buffered"),
+		byteBuffered:      scope.Gauge("byte-buffered"),
+		bufferScanBatch:   instrument.MustCreateSampledTimer(scope.Timer("buffer-scan-batch"), samplingRate),
 	}
 }
 
@@ -83,22 +85,17 @@ type buffer struct {
 }
 
 // NewBuffer returns a new buffer.
-func NewBuffer(opts Options) producer.Buffer {
+func NewBuffer(opts Options) (producer.Buffer, error) {
 	if opts == nil {
 		opts = NewOptions()
 	}
-	var (
-		maxMessageSize = opts.MaxMessageSize()
-		maxBufferSize  = opts.MaxBufferSize()
-	)
-	if maxMessageSize > maxBufferSize {
-		// Max message size can only be as large as max buffer size.
-		maxMessageSize = maxBufferSize
+	if err := opts.Validate(); err != nil {
+		return nil, err
 	}
 	b := &buffer{
 		buffers:        list.New(),
-		maxBufferSize:  uint64(maxBufferSize),
-		maxMessageSize: uint32(maxMessageSize),
+		maxBufferSize:  uint64(opts.MaxBufferSize()),
+		maxMessageSize: uint32(opts.MaxMessageSize()),
 		opts:           opts,
 		retrier:        retry.NewRetrier(opts.CleanupRetryOptions()),
 		m: newBufferMetrics(
@@ -110,7 +107,7 @@ func NewBuffer(opts Options) producer.Buffer {
 		isClosed: false,
 	}
 	b.onFinalizeFn = b.subSize
-	return b
+	return b, nil
 }
 
 func (b *buffer) Add(m producer.Message) (*producer.RefCountedMessage, error) {
@@ -231,6 +228,7 @@ func (b *buffer) cleanup() error {
 	b.m.messageBuffered.Update(float64(b.bufferLen()))
 	b.m.byteBuffered.Update(float64(b.size.Load()))
 	if totalRemoved == 0 {
+		b.m.cleanupNoProgress.Inc(1)
 		return errCleanupNoProgress
 	}
 	return nil
