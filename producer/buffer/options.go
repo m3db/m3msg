@@ -39,6 +39,7 @@ const (
 )
 
 var (
+	errInvalidScanBatchSize   = errors.New("invalid scan batch size")
 	errInvalidMaxMessageSize  = errors.New("invalid max message size")
 	errNegativeMaxBufferSize  = errors.New("negative max buffer size")
 	errNegativeMaxMessageSize = errors.New("negative max message size")
@@ -153,6 +154,9 @@ func (opts *bufferOptions) SetInstrumentOptions(value instrument.Options) Option
 }
 
 func (opts *bufferOptions) Validate() error {
+	if opts.ScanBatchSize() <= 0 {
+		return errInvalidScanBatchSize
+	}
 	if opts.MaxBufferSize() <= 0 {
 		return errNegativeMaxBufferSize
 	}

@@ -45,6 +45,9 @@ func TestOptionsValidation(t *testing.T) {
 
 	opts = opts.SetMaxBufferSize(-1)
 	require.Equal(t, errNegativeMaxBufferSize, opts.Validate())
+
+	opts = opts.SetScanBatchSize(0)
+	require.Equal(t, errInvalidScanBatchSize, opts.Validate())
 }
 
 func TestBuffer(t *testing.T) {
@@ -113,6 +116,46 @@ func TestBufferCleanupEarliest(t *testing.T) {
 	require.Equal(t, 1, b.bufferList.Len())
 
 	mm.EXPECT().Finalize(producer.Dropped)
+	b.dropEarliestUntilTarget(0)
+	require.Equal(t, uint64(0), b.size.Load())
+	require.Equal(t, 0, b.bufferList.Len())
+}
+
+func TestBufferCleanupEarliestBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mm := producer.NewMockMessage(ctrl)
+	mm.EXPECT().Size().Return(100).AnyTimes()
+
+	b := mustNewBuffer(t, NewOptions())
+	_, err := b.Add(mm)
+	require.NoError(t, err)
+	_, err = b.Add(mm)
+	require.NoError(t, err)
+	_, err = b.Add(mm)
+	require.NoError(t, err)
+	_, err = b.Add(mm)
+	require.NoError(t, err)
+	_, err = b.Add(mm)
+	require.NoError(t, err)
+	require.Equal(t, 5*mm.Size(), int(b.size.Load()))
+	require.Equal(t, 5, b.bufferList.Len())
+
+	mm.EXPECT().Finalize(producer.Dropped)
+	// Didn't need to iterate through the full batch size to get to target size.
+	shouldContinue := b.dropEarliestBatchUntilTargetWithLock(uint64(450), 2)
+	require.False(t, shouldContinue)
+	require.Equal(t, uint64(4*mm.Size()), b.size.Load())
+	require.Equal(t, 4, b.bufferList.Len())
+
+	mm.EXPECT().Finalize(producer.Dropped).Times(2)
+	shouldContinue = b.dropEarliestBatchUntilTargetWithLock(uint64(50), 2)
+	require.True(t, shouldContinue)
+	require.Equal(t, uint64(200), b.size.Load())
+	require.Equal(t, 2, b.bufferList.Len())
+
+	mm.EXPECT().Finalize(producer.Dropped).Times(2)
 	b.dropEarliestUntilTarget(0)
 	require.Equal(t, uint64(0), b.size.Load())
 	require.Equal(t, 0, b.bufferList.Len())

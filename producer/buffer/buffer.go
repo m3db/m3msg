@@ -347,6 +347,7 @@ func (b *buffer) Close(ct producer.CloseType) {
 	b.Unlock()
 	b.waitUntilAllDataConsumed()
 	close(b.doneCh)
+	close(b.dropEarliestCh)
 	b.wg.Wait()
 }
 
