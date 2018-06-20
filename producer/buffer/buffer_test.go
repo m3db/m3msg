@@ -21,6 +21,7 @@
 package buffer
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -37,8 +38,13 @@ func TestOptionsValidation(t *testing.T) {
 	require.NoError(t, opts.Validate())
 
 	opts = opts.SetMaxMessageSize(100).SetMaxBufferSize(1)
-	require.Error(t, opts.Validate())
 	require.Equal(t, errInvalidMaxMessageSize, opts.Validate())
+
+	opts = opts.SetMaxMessageSize(-1)
+	require.Equal(t, errNegativeMaxMessageSize, opts.Validate())
+
+	opts = opts.SetMaxBufferSize(-1)
+	require.Equal(t, errNegativeMaxBufferSize, opts.Validate())
 }
 
 func TestBuffer(t *testing.T) {
@@ -50,7 +56,7 @@ func TestBuffer(t *testing.T) {
 
 	b := mustNewBuffer(t, testOptions())
 	require.Equal(t, 0, int(b.size.Load()))
-	require.Equal(t, 0, b.buffers.Len())
+	require.Equal(t, 0, b.bufferList.Len())
 
 	rm, err := b.Add(mm)
 	require.NoError(t, err)
@@ -104,12 +110,12 @@ func TestBufferCleanupEarliest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int(rm.Size()), mm.Size())
 	require.Equal(t, rm.Size(), b.size.Load())
-	require.Equal(t, 1, b.buffers.Len())
+	require.Equal(t, 1, b.bufferList.Len())
 
 	mm.EXPECT().Finalize(producer.Dropped)
-	b.dropEarliestUntilTargetWithLock(0)
+	b.dropEarliestUntilTarget(0)
 	require.Equal(t, uint64(0), b.size.Load())
-	require.Equal(t, 0, b.buffers.Len())
+	require.Equal(t, 0, b.bufferList.Len())
 }
 
 func TestCleanupBatch(t *testing.T) {
@@ -136,16 +142,16 @@ func TestCleanupBatch(t *testing.T) {
 	require.NoError(t, err)
 
 	mm1.EXPECT().Finalize(gomock.Eq(producer.Dropped))
-	front := b.buffers.Front()
+	front := b.bufferList.Front()
 	front.Value.(*producer.RefCountedMessage).Drop()
 
 	require.Equal(t, 3, b.bufferLen())
-	e, removed := b.cleanupBatchWithLock(front, 2)
+	e, removed := b.cleanupBatchWithLock(front, 2, false)
 	require.Equal(t, 3, int(e.Value.(*producer.RefCountedMessage).Size()))
 	require.Equal(t, 2, b.bufferLen())
 	require.Equal(t, 1, removed)
 
-	e, removed = b.cleanupBatchWithLock(e, 2)
+	e, removed = b.cleanupBatchWithLock(e, 2, false)
 	require.Nil(t, e)
 	require.Equal(t, 2, b.bufferLen())
 	require.Equal(t, 0, removed)
@@ -176,10 +182,10 @@ func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
 	require.Error(t, b.cleanup())
 
 	mm1.EXPECT().Finalize(gomock.Eq(producer.Dropped))
-	b.buffers.Front().Value.(*producer.RefCountedMessage).Drop()
+	b.bufferList.Front().Value.(*producer.RefCountedMessage).Drop()
 
 	require.Equal(t, 3, b.bufferLen())
-	e, removed := b.cleanupBatchWithLock(b.buffers.Front(), 1)
+	e, removed := b.cleanupBatchWithLock(b.bufferList.Front(), 1, false)
 	// e stopped at message 2.
 	require.Equal(t, 2, int(e.Value.(*producer.RefCountedMessage).Size()))
 	require.Equal(t, 2, b.bufferLen())
@@ -188,17 +194,17 @@ func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
 
 	require.NotNil(t, e.Next())
 	// Mimic A new write triggered DropEarliest and removed message 2.
-	b.buffers.Remove(e)
+	b.bufferList.Remove(e)
 	require.Nil(t, e.Next())
 	require.Equal(t, 1, b.bufferLen())
 
 	// Mark message 3 as dropped, so it's ready to be removed.
 	mm3.EXPECT().Finalize(gomock.Eq(producer.Dropped))
-	b.buffers.Front().Value.(*producer.RefCountedMessage).Drop()
+	b.bufferList.Front().Value.(*producer.RefCountedMessage).Drop()
 
 	// But next clean batch from the removed element is going to do nothing
 	// because the starting element is already removed.
-	e, removed = b.cleanupBatchWithLock(e, 3)
+	e, removed = b.cleanupBatchWithLock(e, 3, false)
 	require.Equal(t, 1, b.bufferLen())
 	require.Equal(t, 0, removed)
 	require.Nil(t, e)
@@ -254,11 +260,11 @@ func TestListRemoveCleanupNextAndPrev(t *testing.T) {
 	_, err = b.Add(mm)
 	require.NoError(t, err)
 
-	e := b.buffers.Front().Next()
+	e := b.bufferList.Front().Next()
 	require.NotNil(t, e.Next())
 	require.NotNil(t, e.Prev())
 
-	b.buffers.Remove(e)
+	b.bufferList.Remove(e)
 	require.Nil(t, e.Next())
 	require.Nil(t, e.Prev())
 }
@@ -313,16 +319,31 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	require.False(t, rd1.IsDroppedOrConsumed())
 	require.False(t, rd2.IsDroppedOrConsumed())
 	require.False(t, rd3.IsDroppedOrConsumed())
+	require.Equal(t, b.maxBufferSize, b.size.Load())
 
-	md2 := producer.NewMockMessage(ctrl)
-	md2.EXPECT().Size().Return(2 * mm.Size()).AnyTimes()
+	mm2 := producer.NewMockMessage(ctrl)
+	mm2.EXPECT().Size().Return(2 * mm.Size()).AnyTimes()
 
-	mm.EXPECT().Finalize(producer.Dropped).Times(2)
-	_, err = b.Add(md2)
+	require.Equal(t, 0, len(b.dropEarliestCh))
+	_, err = b.Add(mm2)
 	require.NoError(t, err)
+	require.Equal(t, uint64(500), b.size.Load())
+	require.Equal(t, 1, len(b.dropEarliestCh))
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	mm.EXPECT().Finalize(producer.Dropped).Do(func(interface{}) {
+		wg.Done()
+	}).Times(2)
+	b.Init()
+	wg.Wait()
 	require.True(t, rd1.IsDroppedOrConsumed())
 	require.True(t, rd2.IsDroppedOrConsumed())
 	require.False(t, rd3.IsDroppedOrConsumed())
+
+	mm.EXPECT().Finalize(producer.Dropped)
+	mm2.EXPECT().Finalize(producer.Dropped)
+	b.Close(producer.DropEverything)
 }
 
 func TestBufferReturnErrorOnFull(t *testing.T) {
@@ -363,6 +384,7 @@ func mustNewBuffer(t testing.TB, opts Options) *buffer {
 func testOptions() Options {
 	return NewOptions().
 		SetCloseCheckInterval(100 * time.Millisecond).
+		SetDropEarliestInterval(100 * time.Millisecond).
 		SetCleanupRetryOptions(retry.NewOptions().SetInitialBackoff(100 * time.Millisecond).SetMaxBackoff(200 * time.Millisecond))
 }
 
@@ -376,6 +398,7 @@ func BenchmarkProduce(b *testing.B) {
 
 	buffer := mustNewBuffer(b, NewOptions().
 		SetMaxBufferSize(1000*1000*200).
+		SetDropEarliestInterval(100*time.Millisecond).
 		SetOnFullStrategy(DropEarliest),
 	)
 

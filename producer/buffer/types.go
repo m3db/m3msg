@@ -67,6 +67,14 @@ type Options interface {
 	// SetCloseCheckInterval sets the close check interval.
 	SetCloseCheckInterval(value time.Duration) Options
 
+	// DropEarliestInterval returns the interval to drop earliest buffer.
+	// The max buffer size might be spilled over during the interval.
+	DropEarliestInterval() time.Duration
+
+	// SetDropEarliestInterval sets the interval to drop earliest buffer.
+	// The max buffer size might be spilled over during the interval.
+	SetDropEarliestInterval(value time.Duration) Options
+
 	// ScanBatchSize returns the scan batch size.
 	ScanBatchSize() int
 

@@ -32,33 +32,38 @@ const (
 	defaultMaxBufferSize         = 100 * 1024 * 1024 // 100MB.
 	defaultMaxMessageSize        = 1 * 1024 * 1024   // 1MB.
 	defaultCloseCheckInterval    = time.Second
+	defaultDropEarliestInterval  = time.Second
 	defaultScanBatchSize         = 16
 	defaultCleanupInitialBackoff = 10 * time.Second
 	defaultCleanupMaxBackoff     = time.Minute
 )
 
 var (
-	errInvalidMaxMessageSize = errors.New("invalid max message size")
+	errInvalidMaxMessageSize  = errors.New("invalid max message size")
+	errNegativeMaxBufferSize  = errors.New("negative max buffer size")
+	errNegativeMaxMessageSize = errors.New("negative max message size")
 )
 
 type bufferOptions struct {
-	strategy           OnFullStrategy
-	maxBufferSize      int
-	maxMessageSize     int
-	closeCheckInterval time.Duration
-	scanBatchSize      int
-	rOpts              retry.Options
-	iOpts              instrument.Options
+	strategy             OnFullStrategy
+	maxBufferSize        int
+	maxMessageSize       int
+	closeCheckInterval   time.Duration
+	dropEarliestInterval time.Duration
+	scanBatchSize        int
+	rOpts                retry.Options
+	iOpts                instrument.Options
 }
 
 // NewOptions creates Options.
 func NewOptions() Options {
 	return &bufferOptions{
-		strategy:           DropEarliest,
-		maxBufferSize:      defaultMaxBufferSize,
-		maxMessageSize:     defaultMaxMessageSize,
-		closeCheckInterval: defaultCloseCheckInterval,
-		scanBatchSize:      defaultScanBatchSize,
+		strategy:             DropEarliest,
+		maxBufferSize:        defaultMaxBufferSize,
+		maxMessageSize:       defaultMaxMessageSize,
+		closeCheckInterval:   defaultCloseCheckInterval,
+		dropEarliestInterval: defaultDropEarliestInterval,
+		scanBatchSize:        defaultScanBatchSize,
 		rOpts: retry.NewOptions().
 			SetInitialBackoff(defaultCleanupInitialBackoff).
 			SetMaxBackoff(defaultCleanupMaxBackoff).
@@ -107,6 +112,16 @@ func (opts *bufferOptions) SetCloseCheckInterval(value time.Duration) Options {
 	return &o
 }
 
+func (opts *bufferOptions) DropEarliestInterval() time.Duration {
+	return opts.dropEarliestInterval
+}
+
+func (opts *bufferOptions) SetDropEarliestInterval(value time.Duration) Options {
+	o := *opts
+	o.dropEarliestInterval = value
+	return &o
+}
+
 func (opts *bufferOptions) ScanBatchSize() int {
 	return opts.scanBatchSize
 }
@@ -138,6 +153,12 @@ func (opts *bufferOptions) SetInstrumentOptions(value instrument.Options) Option
 }
 
 func (opts *bufferOptions) Validate() error {
+	if opts.MaxBufferSize() <= 0 {
+		return errNegativeMaxBufferSize
+	}
+	if opts.MaxMessageSize() <= 0 {
+		return errNegativeMaxMessageSize
+	}
 	if opts.MaxMessageSize() > opts.MaxBufferSize() {
 		// Max message size can only be as large as max buffer size.
 		return errInvalidMaxMessageSize
