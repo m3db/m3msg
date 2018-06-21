@@ -223,11 +223,7 @@ func (w *messageWriterImpl) write(
 		written = false
 	)
 	for i := len(iterationIndexes) - 1; i >= 0; i-- {
-		j := rand.Intn(i + 1)
-		// NB: we should only mutate the order in the iteration indexes and
-		// keep the order of consumer writers unchanged to prevent data race.
-		iterationIndexes[i], iterationIndexes[j] = iterationIndexes[j], iterationIndexes[i]
-		if err := consumerWriters[j].Write(msg); err != nil {
+		if err := consumerWriters[randIndex(iterationIndexes, i)].Write(msg); err != nil {
 			w.m.oneConsumerWriteError.Inc(1)
 			continue
 		}
@@ -242,6 +238,14 @@ func (w *messageWriterImpl) write(
 	// Could not be written to any consumer, will retry later.
 	w.m.allConsumersWriteError.Inc(1)
 	return errFailAllConsumers
+}
+
+func randIndex(iterationIndexes []int, i int) int {
+	j := rand.Intn(i + 1)
+	// NB: we should only mutate the order in the iteration indexes and
+	// keep the order of consumer writers unchanged to prevent data race.
+	iterationIndexes[i], iterationIndexes[j] = iterationIndexes[j], iterationIndexes[i]
+	return j
 }
 
 func (w *messageWriterImpl) nextRetryNanos(writeTimes int, nowNanos int64) int64 {

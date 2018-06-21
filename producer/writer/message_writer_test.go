@@ -35,6 +35,41 @@ import (
 	"github.com/uber-go/tally"
 )
 
+func TestMessageWriterRandomIndex(t *testing.T) {
+	indexes := make([]int, 10)
+	reset := func() {
+		for i := range indexes {
+			indexes[i] = i
+		}
+	}
+
+	reset()
+	firstIdx := randIndex(indexes, len(indexes)-1)
+	for {
+		reset()
+		newIdx := randIndex(indexes, len(indexes)-1)
+		// Make sure the first index is random.
+		if firstIdx != newIdx {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	reset()
+	idx1 := randIndex(indexes, len(indexes)-1)
+	idx2 := randIndex(indexes, len(indexes)-2)
+	for {
+		reset()
+		newIdx1 := randIndex(indexes, len(indexes)-1)
+		newIdx2 := randIndex(indexes, len(indexes)-2)
+		// Make sure the order is random.
+		if idx2-idx1 != newIdx2-newIdx1 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func TestMessageWriterWithPooling(t *testing.T) {
 	defer leaktest.Check(t)()
 
