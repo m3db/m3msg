@@ -91,7 +91,7 @@ func TestSharedShardWriter(t *testing.T) {
 
 	mw := sw.(*sharedShardWriter).mw.(*messageWriterImpl)
 	mw.RLock()
-	require.Equal(t, 1, len(mw.mutableConsumerWriters))
+	require.Equal(t, 1, len(mw.consumerWriters))
 	require.Equal(t, 1, mw.queue.Len())
 	mw.RUnlock()
 
@@ -100,7 +100,7 @@ func TestSharedShardWriter(t *testing.T) {
 		cws,
 	)
 	mw.RLock()
-	require.Equal(t, 2, len(mw.mutableConsumerWriters))
+	require.Equal(t, 2, len(mw.consumerWriters))
 	mw.RUnlock()
 	for {
 		mw.RLock()

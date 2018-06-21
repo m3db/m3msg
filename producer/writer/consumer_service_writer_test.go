@@ -133,7 +133,7 @@ func TestConsumerServiceWriterWithSharedConsumerWithNonShardedPlacement(t *testi
 	}
 
 	for _, sw := range w.(*consumerServiceWriterImpl).shardWriters {
-		require.Equal(t, 3, len(sw.(*sharedShardWriter).mw.(*messageWriterImpl).mutableConsumerWriters))
+		require.Equal(t, 3, len(sw.(*sharedShardWriter).mw.(*messageWriterImpl).consumerWriters))
 	}
 
 	p2 := placement.NewPlacement().
@@ -159,7 +159,7 @@ func TestConsumerServiceWriterWithSharedConsumerWithNonShardedPlacement(t *testi
 	}
 
 	for _, sw := range w.(*consumerServiceWriterImpl).shardWriters {
-		require.Equal(t, 2, len(sw.(*sharedShardWriter).mw.(*messageWriterImpl).mutableConsumerWriters))
+		require.Equal(t, 2, len(sw.(*sharedShardWriter).mw.(*messageWriterImpl).consumerWriters))
 	}
 
 	csw.Close()

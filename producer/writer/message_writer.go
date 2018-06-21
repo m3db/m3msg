@@ -129,18 +129,18 @@ type messageWriterImpl struct {
 	retryOpts         retry.Options
 	r                 *rand.Rand
 
-	msgID                    uint64
-	queue                    *list.List
-	mutableConsumerWriters   []consumerWriter
-	immutableConsumerWriters []consumerWriter
-	acks                     *acks
-	cutOffNanos              int64
-	cutOverNanos             int64
-	toBeRetried              []*message
-	isClosed                 bool
-	doneCh                   chan struct{}
-	wg                       sync.WaitGroup
-	m                        messageWriterMetrics
+	msgID            uint64
+	queue            *list.List
+	consumerWriters  []consumerWriter
+	iterationIndexes []int
+	acks             *acks
+	cutOffNanos      int64
+	cutOverNanos     int64
+	toBeRetried      []*message
+	isClosed         bool
+	doneCh           chan struct{}
+	wg               sync.WaitGroup
+	m                messageWriterMetrics
 
 	nowFn clock.NowFn
 }
@@ -209,6 +209,7 @@ func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
 }
 
 func (w *messageWriterImpl) write(
+	iterationIndexes []int,
 	consumerWriters []consumerWriter,
 	m *message,
 ) error {
@@ -221,10 +222,12 @@ func (w *messageWriterImpl) write(
 	var (
 		written = false
 	)
-	for i := len(consumerWriters) - 1; i >= 0; i-- {
+	for i := len(iterationIndexes) - 1; i >= 0; i-- {
 		j := rand.Intn(i + 1)
-		consumerWriters[i], consumerWriters[j] = consumerWriters[j], consumerWriters[i]
-		if err := consumerWriters[i].Write(msg); err != nil {
+		// NB: we should only mutate the order in the iteration indexes and
+		// keep the order of consumer writers unchanged to prevent data race.
+		iterationIndexes[i], iterationIndexes[j] = iterationIndexes[j], iterationIndexes[i]
+		if err := consumerWriters[j].Write(msg); err != nil {
 			w.m.oneConsumerWriteError.Inc(1)
 			continue
 		}
@@ -291,18 +294,21 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 	e := w.queue.Front()
 	w.RUnlock()
 	var (
-		toBeRetried []*message
-		beforeRetry = w.nowFn()
-		batchSize   = w.opts.MessageRetryBatchSize()
+		toBeRetried      []*message
+		beforeRetry      = w.nowFn()
+		batchSize        = w.opts.MessageRetryBatchSize()
+		consumerWriters  []consumerWriter
+		iterationIndexes []int
 	)
 	for e != nil {
 		beforeBatch := w.nowFn()
 		beforeBatchNanos := beforeBatch.UnixNano()
 		w.Lock()
 		e, toBeRetried = w.retryBatchWithLock(e, beforeBatchNanos, batchSize)
-		consumerWriters := w.mutableConsumerWriters
+		consumerWriters = w.consumerWriters
+		iterationIndexes = w.iterationIndexes
 		w.Unlock()
-		err := w.writeBatch(consumerWriters, toBeRetried)
+		err := w.writeBatch(iterationIndexes, consumerWriters, toBeRetried)
 		w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
 		if err != nil {
 			// When we can't write to any consumer writer, skip the tick
@@ -314,6 +320,7 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 }
 
 func (w *messageWriterImpl) writeBatch(
+	iterationIndexes []int,
 	consumerWriters []consumerWriter,
 	toBeRetried []*message,
 ) error {
@@ -323,7 +330,7 @@ func (w *messageWriterImpl) writeBatch(
 		return errNoWriters
 	}
 	for _, m := range toBeRetried {
-		if err := w.write(consumerWriters, m); err != nil {
+		if err := w.write(iterationIndexes, consumerWriters, m); err != nil {
 			return err
 		}
 	}
@@ -460,36 +467,34 @@ func (w *messageWriterImpl) SetCutoverNanos(nanos int64) {
 }
 
 func (w *messageWriterImpl) AddConsumerWriter(cw consumerWriter) {
-	// We need a mutable copy and an immutable copy of the consumer writers
-	// as we will randomly reorder the mutable slice to choose a consumer
-	// to write to.
 	w.Lock()
-	newConsumerWriters := make([]consumerWriter, 0, len(w.immutableConsumerWriters)+1)
-	newConsumerWriters = append(newConsumerWriters, w.immutableConsumerWriters...)
+	newConsumerWriters := make([]consumerWriter, 0, len(w.consumerWriters)+1)
+	newConsumerWriters = append(newConsumerWriters, w.consumerWriters...)
 	newConsumerWriters = append(newConsumerWriters, cw)
 
-	w.immutableConsumerWriters = make([]consumerWriter, len(newConsumerWriters))
-	copy(w.immutableConsumerWriters, newConsumerWriters)
-	w.mutableConsumerWriters = newConsumerWriters
+	w.iterationIndexes = make([]int, len(newConsumerWriters))
+	for i := range w.iterationIndexes {
+		w.iterationIndexes[i] = i
+	}
+	w.consumerWriters = newConsumerWriters
 	w.Unlock()
 }
 
 func (w *messageWriterImpl) RemoveConsumerWriter(addr string) {
-	// We need a mutable copy and an immutable copy of the consumer writers
-	// as we will randomly reorder the mutable slice to choose a consumer
-	// to write to.
 	w.Lock()
-	newConsumerWriters := make([]consumerWriter, 0, len(w.immutableConsumerWriters)-1)
-	for _, cw := range w.immutableConsumerWriters {
+	newConsumerWriters := make([]consumerWriter, 0, len(w.consumerWriters)-1)
+	for _, cw := range w.consumerWriters {
 		if cw.Address() == addr {
 			continue
 		}
 		newConsumerWriters = append(newConsumerWriters, cw)
 	}
 
-	w.immutableConsumerWriters = make([]consumerWriter, len(newConsumerWriters))
-	copy(w.immutableConsumerWriters, newConsumerWriters)
-	w.mutableConsumerWriters = newConsumerWriters
+	w.iterationIndexes = make([]int, len(newConsumerWriters))
+	for i := range w.iterationIndexes {
+		w.iterationIndexes[i] = i
+	}
+	w.consumerWriters = newConsumerWriters
 	w.Unlock()
 }
 
