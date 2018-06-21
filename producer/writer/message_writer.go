@@ -245,7 +245,7 @@ func randIndex(iterationIndexes []int, i int) int {
 	// NB: we should only mutate the order in the iteration indexes and
 	// keep the order of consumer writers unchanged to prevent data race.
 	iterationIndexes[i], iterationIndexes[j] = iterationIndexes[j], iterationIndexes[i]
-	return j
+	return iterationIndexes[i]
 }
 
 func (w *messageWriterImpl) nextRetryNanos(writeTimes int, nowNanos int64) int64 {

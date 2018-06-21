@@ -70,6 +70,26 @@ func TestMessageWriterRandomIndex(t *testing.T) {
 	}
 }
 
+func TestMessageWriterRandomFullIteration(t *testing.T) {
+	indexes := make([]int, 100)
+	var indexMap map[int]struct{}
+	reset := func() {
+		for i := range indexes {
+			indexes[i] = i
+		}
+		indexMap = make(map[int]struct{}, 100)
+	}
+
+	for n := 0; n < 1000; n++ {
+		reset()
+		for i := len(indexes) - 1; i >= 0; i-- {
+			idx := randIndex(indexes, i)
+			indexMap[idx] = struct{}{}
+		}
+		require.Equal(t, 100, len(indexMap))
+	}
+}
+
 func TestMessageWriterWithPooling(t *testing.T) {
 	defer leaktest.Check(t)()
 
