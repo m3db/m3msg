@@ -81,6 +81,15 @@ type Options interface {
 	// SetScanBatchSize sets the scan batch size.
 	SetScanBatchSize(value int) Options
 
+	// AllowedSpilloverRatio returns the ratio for allowed buffer spill over,
+	// below which the buffer will drop earliest messages asynchronizely for
+	// better performance. When the limit for allowed spill over is reached,
+	// the buffer will start to drop earliest messages synchronizely.
+	AllowedSpilloverRatio() float64
+
+	// SetAllowedSpilloverRatio sets the ratio for allowed buffer spill over.
+	SetAllowedSpilloverRatio(value float64) Options
+
 	// CleanupRetryOptions returns the cleanup retry options.
 	CleanupRetryOptions() retry.Options
 

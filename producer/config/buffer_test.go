@@ -40,6 +40,7 @@ maxMessageSize: 16
 closeCheckInterval: 3s
 scanBatchSize: 128
 dropEarliestInterval: 500ms
+allowedSpilloverRatio: 0.1
 cleanupRetry:
   initialBackoff: 2s
 `
@@ -54,6 +55,7 @@ cleanupRetry:
 	require.Equal(t, 3*time.Second, bOpts.CloseCheckInterval())
 	require.Equal(t, 128, bOpts.ScanBatchSize())
 	require.Equal(t, 500*time.Millisecond, bOpts.DropEarliestInterval())
+	require.Equal(t, 0.1, bOpts.AllowedSpilloverRatio())
 	require.Equal(t, 2*time.Second, bOpts.CleanupRetryOptions().InitialBackoff())
 }
 

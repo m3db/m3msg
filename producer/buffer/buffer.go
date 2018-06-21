@@ -48,6 +48,8 @@ type bufferMetrics struct {
 	byteDropped       tally.Counter
 	messageTooLarge   tally.Counter
 	cleanupNoProgress tally.Counter
+	dropEarlistSync   tally.Counter
+	dropEarlistAsync  tally.Counter
 	messageBuffered   tally.Gauge
 	byteBuffered      tally.Gauge
 	bufferScanBatch   tally.Timer
@@ -62,6 +64,8 @@ func newBufferMetrics(
 		byteDropped:       scope.Counter("buffer-byte-dropped"),
 		messageTooLarge:   scope.Counter("message-too-large"),
 		cleanupNoProgress: scope.Counter("cleanup-no-progress"),
+		dropEarlistSync:   scope.Counter("drop-earlist-sync"),
+		dropEarlistAsync:  scope.Counter("drop-earlist-async"),
 		messageBuffered:   scope.Gauge("message-buffered"),
 		byteBuffered:      scope.Gauge("byte-buffered"),
 		bufferScanBatch:   instrument.MustCreateSampledTimer(scope.Timer("buffer-scan-batch"), samplingRate),
@@ -71,14 +75,15 @@ func newBufferMetrics(
 type buffer struct {
 	sync.RWMutex
 
-	listLock       sync.RWMutex
-	bufferList     *list.List
-	opts           Options
-	maxBufferSize  uint64
-	maxMessageSize int
-	onFinalizeFn   producer.OnFinalizeFn
-	retrier        retry.Retrier
-	m              bufferMetrics
+	listLock         sync.RWMutex
+	bufferList       *list.List
+	opts             Options
+	maxBufferSize    uint64
+	maxSpilloverSize uint64
+	maxMessageSize   int
+	onFinalizeFn     producer.OnFinalizeFn
+	retrier          retry.Retrier
+	m                bufferMetrics
 
 	size           *atomic.Uint64
 	isClosed       bool
@@ -96,12 +101,15 @@ func NewBuffer(opts Options) (producer.Buffer, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
+	maxBufferSize := uint64(opts.MaxBufferSize())
+	allowedSpillover := float64(maxBufferSize) * opts.AllowedSpilloverRatio()
 	b := &buffer{
-		bufferList:     list.New(),
-		maxBufferSize:  uint64(opts.MaxBufferSize()),
-		maxMessageSize: opts.MaxMessageSize(),
-		opts:           opts,
-		retrier:        retry.NewRetrier(opts.CleanupRetryOptions()),
+		bufferList:       list.New(),
+		maxBufferSize:    maxBufferSize,
+		maxSpilloverSize: uint64(allowedSpillover) + maxBufferSize,
+		maxMessageSize:   opts.MaxMessageSize(),
+		opts:             opts,
+		retrier:          retry.NewRetrier(opts.CleanupRetryOptions()),
 		m: newBufferMetrics(
 			opts.InstrumentOptions().MetricsScope(),
 			opts.InstrumentOptions().MetricsSamplingRate(),
@@ -126,15 +134,14 @@ func (b *buffer) Add(m producer.Message) (*producer.RefCountedMessage, error) {
 		b.RUnlock()
 		return nil, errBufferClosed
 	}
-	dataSize := uint64(s)
-	// NB: This prevents uint math overflow as b.maxBufferSize >= dataSize.
-	if b.size.Load() > b.maxBufferSize-dataSize {
-		if err := b.produceOnFull(); err != nil {
+	messageSize := uint64(s)
+	newBufferSize := b.size.Add(messageSize)
+	if newBufferSize > b.maxBufferSize {
+		if err := b.produceOnFull(newBufferSize, messageSize); err != nil {
 			b.RUnlock()
 			return nil, err
 		}
 	}
-	b.size.Add(dataSize)
 	rm := producer.NewRefCountedMessage(m, b.onFinalizeFn)
 	b.listLock.Lock()
 	b.bufferList.PushBack(rm)
@@ -143,15 +150,27 @@ func (b *buffer) Add(m producer.Message) (*producer.RefCountedMessage, error) {
 	return rm, nil
 }
 
-func (b *buffer) produceOnFull() error {
+func (b *buffer) produceOnFull(newBufferSize uint64, messageSize uint64) error {
 	switch b.opts.OnFullStrategy() {
 	case ReturnError:
+		b.size.Sub(messageSize)
 		return errBufferFull
 	case DropEarliest:
+		if newBufferSize >= b.maxSpilloverSize {
+			// The size after the write reached max allowed spill over size.
+			// We have to clean up the buffer synchronizely to make room for
+			// the new write.
+			b.dropEarliestUntilTarget(b.maxBufferSize)
+			b.m.dropEarlistSync.Inc(1)
+			return nil
+		}
+		// The new message is within the allowed spill over range, clean up
+		// the buffer asynchronizely.
 		select {
 		case b.dropEarliestCh <- emptyStruct:
 		default:
 		}
+		b.m.dropEarlistAsync.Inc(1)
 	}
 	return nil
 }

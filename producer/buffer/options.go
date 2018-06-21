@@ -35,6 +35,7 @@ const (
 	defaultDropEarliestInterval  = time.Second
 	defaultScanBatchSize         = 16
 	defaultCleanupInitialBackoff = 10 * time.Second
+	defaultAllowedSpilloverRatio = 0.2
 	defaultCleanupMaxBackoff     = time.Minute
 )
 
@@ -46,25 +47,27 @@ var (
 )
 
 type bufferOptions struct {
-	strategy             OnFullStrategy
-	maxBufferSize        int
-	maxMessageSize       int
-	closeCheckInterval   time.Duration
-	dropEarliestInterval time.Duration
-	scanBatchSize        int
-	rOpts                retry.Options
-	iOpts                instrument.Options
+	strategy              OnFullStrategy
+	maxBufferSize         int
+	maxMessageSize        int
+	closeCheckInterval    time.Duration
+	dropEarliestInterval  time.Duration
+	scanBatchSize         int
+	allowedSpilloverRatio float64
+	rOpts                 retry.Options
+	iOpts                 instrument.Options
 }
 
 // NewOptions creates Options.
 func NewOptions() Options {
 	return &bufferOptions{
-		strategy:             DropEarliest,
-		maxBufferSize:        defaultMaxBufferSize,
-		maxMessageSize:       defaultMaxMessageSize,
-		closeCheckInterval:   defaultCloseCheckInterval,
-		dropEarliestInterval: defaultDropEarliestInterval,
-		scanBatchSize:        defaultScanBatchSize,
+		strategy:              DropEarliest,
+		maxBufferSize:         defaultMaxBufferSize,
+		maxMessageSize:        defaultMaxMessageSize,
+		closeCheckInterval:    defaultCloseCheckInterval,
+		dropEarliestInterval:  defaultDropEarliestInterval,
+		scanBatchSize:         defaultScanBatchSize,
+		allowedSpilloverRatio: defaultAllowedSpilloverRatio,
 		rOpts: retry.NewOptions().
 			SetInitialBackoff(defaultCleanupInitialBackoff).
 			SetMaxBackoff(defaultCleanupMaxBackoff).
@@ -130,6 +133,16 @@ func (opts *bufferOptions) ScanBatchSize() int {
 func (opts *bufferOptions) SetScanBatchSize(value int) Options {
 	o := *opts
 	o.scanBatchSize = value
+	return &o
+}
+
+func (opts *bufferOptions) AllowedSpilloverRatio() float64 {
+	return opts.allowedSpilloverRatio
+}
+
+func (opts *bufferOptions) SetAllowedSpilloverRatio(value float64) Options {
+	o := *opts
+	o.allowedSpilloverRatio = value
 	return &o
 }
 

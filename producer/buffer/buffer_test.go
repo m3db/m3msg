@@ -339,7 +339,7 @@ func TestBufferCloseDropEverything(t *testing.T) {
 	}
 }
 
-func TestBufferDropEarliestOnFull(t *testing.T) {
+func TestBufferDropEarliestAsyncOnFull(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(t)
@@ -350,15 +350,20 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 
 	b := mustNewBuffer(t,
 		testOptions().
+			SetAllowedSpilloverRatio(0.8).
 			SetMaxMessageSize(3*int(mm.Size())).
 			SetMaxBufferSize(3*int(mm.Size())),
 	)
+	require.Equal(t, 540, int(b.maxSpilloverSize))
 	rd1, err := b.Add(mm)
 	require.NoError(t, err)
+	require.Equal(t, 100, int(b.size.Load()))
 	rd2, err := b.Add(mm)
 	require.NoError(t, err)
+	require.Equal(t, 200, int(b.size.Load()))
 	rd3, err := b.Add(mm)
 	require.NoError(t, err)
+	require.Equal(t, 300, int(b.size.Load()))
 	require.False(t, rd1.IsDroppedOrConsumed())
 	require.False(t, rd2.IsDroppedOrConsumed())
 	require.False(t, rd3.IsDroppedOrConsumed())
@@ -370,7 +375,7 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	require.Equal(t, 0, len(b.dropEarliestCh))
 	_, err = b.Add(mm2)
 	require.NoError(t, err)
-	require.Equal(t, uint64(500), b.size.Load())
+	require.Equal(t, 500, int(b.size.Load()))
 	require.Equal(t, 1, len(b.dropEarliestCh))
 
 	var wg sync.WaitGroup
@@ -387,6 +392,50 @@ func TestBufferDropEarliestOnFull(t *testing.T) {
 	mm.EXPECT().Finalize(producer.Dropped)
 	mm2.EXPECT().Finalize(producer.Dropped)
 	b.Close(producer.DropEverything)
+	require.Equal(t, 0, int(b.size.Load()))
+}
+
+func TestBufferDropEarliestsyncOnFull(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mm := producer.NewMockMessage(ctrl)
+	mm.EXPECT().Size().Return(100).AnyTimes()
+
+	b := mustNewBuffer(t,
+		testOptions().
+			SetAllowedSpilloverRatio(0.2).
+			SetMaxMessageSize(3*int(mm.Size())).
+			SetMaxBufferSize(3*int(mm.Size())),
+	)
+	require.Equal(t, 360, int(b.maxSpilloverSize))
+	rd1, err := b.Add(mm)
+	require.NoError(t, err)
+	require.Equal(t, 100, int(b.size.Load()))
+	rd2, err := b.Add(mm)
+	require.NoError(t, err)
+	require.Equal(t, 200, int(b.size.Load()))
+	rd3, err := b.Add(mm)
+	require.NoError(t, err)
+	require.Equal(t, 300, int(b.size.Load()))
+	require.False(t, rd1.IsDroppedOrConsumed())
+	require.False(t, rd2.IsDroppedOrConsumed())
+	require.False(t, rd3.IsDroppedOrConsumed())
+	require.Equal(t, b.maxBufferSize, b.size.Load())
+
+	mm2 := producer.NewMockMessage(ctrl)
+	mm2.EXPECT().Size().Return(2 * mm.Size()).AnyTimes()
+
+	require.Equal(t, 0, len(b.dropEarliestCh))
+	mm.EXPECT().Finalize(producer.Dropped).Times(2)
+	// This will trigger dropEarlist synchronizely as it reached
+	// max allowed spill over ratio.
+	_, err = b.Add(mm2)
+	require.NoError(t, err)
+	require.Equal(t, 300, int(b.size.Load()))
+	require.Equal(t, 0, len(b.dropEarliestCh))
 }
 
 func TestBufferReturnErrorOnFull(t *testing.T) {
@@ -406,16 +455,20 @@ func TestBufferReturnErrorOnFull(t *testing.T) {
 
 	rd1, err := b.Add(mm)
 	require.NoError(t, err)
+	require.Equal(t, 100, int(b.size.Load()))
 	rd2, err := b.Add(mm)
 	require.NoError(t, err)
+	require.Equal(t, 200, int(b.size.Load()))
 	rd3, err := b.Add(mm)
 	require.NoError(t, err)
+	require.Equal(t, 300, int(b.size.Load()))
 	require.False(t, rd1.IsDroppedOrConsumed())
 	require.False(t, rd2.IsDroppedOrConsumed())
 	require.False(t, rd3.IsDroppedOrConsumed())
 
 	_, err = b.Add(mm)
 	require.Error(t, err)
+	require.Equal(t, 300, int(b.size.Load()))
 }
 
 func mustNewBuffer(t testing.TB, opts Options) *buffer {
