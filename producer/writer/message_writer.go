@@ -129,17 +129,18 @@ type messageWriterImpl struct {
 	retryOpts         retry.Options
 	r                 *rand.Rand
 
-	msgID           uint64
-	queue           *list.List
-	consumerWriters []consumerWriter
-	acks            *acks
-	cutOffNanos     int64
-	cutOverNanos    int64
-	toBeRetried     []*message
-	isClosed        bool
-	doneCh          chan struct{}
-	wg              sync.WaitGroup
-	m               messageWriterMetrics
+	msgID                    uint64
+	queue                    *list.List
+	mutableConsumerWriters   []consumerWriter
+	immutableConsumerWriters []consumerWriter
+	acks                     *acks
+	cutOffNanos              int64
+	cutOverNanos             int64
+	toBeRetried              []*message
+	isClosed                 bool
+	doneCh                   chan struct{}
+	wg                       sync.WaitGroup
+	m                        messageWriterMetrics
 
 	nowFn clock.NowFn
 }
@@ -299,7 +300,7 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 		beforeBatchNanos := beforeBatch.UnixNano()
 		w.Lock()
 		e, toBeRetried = w.retryBatchWithLock(e, beforeBatchNanos, batchSize)
-		consumerWriters := w.consumerWriters
+		consumerWriters := w.mutableConsumerWriters
 		w.Unlock()
 		err := w.writeBatch(consumerWriters, toBeRetried)
 		w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
@@ -459,24 +460,36 @@ func (w *messageWriterImpl) SetCutoverNanos(nanos int64) {
 }
 
 func (w *messageWriterImpl) AddConsumerWriter(cw consumerWriter) {
+	// We need a mutable copy and an immutable copy of the consumer writers
+	// as we will randomly reorder the mutable slice to choose a consumer
+	// to write to.
 	w.Lock()
-	newConsumerWriters := make([]consumerWriter, 0, len(w.consumerWriters)+1)
-	newConsumerWriters = append(newConsumerWriters, w.consumerWriters...)
+	newConsumerWriters := make([]consumerWriter, 0, len(w.immutableConsumerWriters)+1)
+	newConsumerWriters = append(newConsumerWriters, w.immutableConsumerWriters...)
 	newConsumerWriters = append(newConsumerWriters, cw)
-	w.consumerWriters = newConsumerWriters
+
+	w.immutableConsumerWriters = make([]consumerWriter, len(newConsumerWriters))
+	copy(w.immutableConsumerWriters, newConsumerWriters)
+	w.mutableConsumerWriters = newConsumerWriters
 	w.Unlock()
 }
 
 func (w *messageWriterImpl) RemoveConsumerWriter(addr string) {
+	// We need a mutable copy and an immutable copy of the consumer writers
+	// as we will randomly reorder the mutable slice to choose a consumer
+	// to write to.
 	w.Lock()
-	newConsumerWriters := make([]consumerWriter, 0, len(w.consumerWriters)-1)
-	for _, cw := range w.consumerWriters {
+	newConsumerWriters := make([]consumerWriter, 0, len(w.immutableConsumerWriters)-1)
+	for _, cw := range w.immutableConsumerWriters {
 		if cw.Address() == addr {
 			continue
 		}
 		newConsumerWriters = append(newConsumerWriters, cw)
 	}
-	w.consumerWriters = newConsumerWriters
+
+	w.immutableConsumerWriters = make([]consumerWriter, len(newConsumerWriters))
+	copy(w.immutableConsumerWriters, newConsumerWriters)
+	w.mutableConsumerWriters = newConsumerWriters
 	w.Unlock()
 }
 
