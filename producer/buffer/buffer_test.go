@@ -101,7 +101,7 @@ func TestBufferAddMessageLargerThanMaxBufferSize(t *testing.T) {
 	require.Equal(t, errMessageTooLarge, err)
 }
 
-func TestBufferCleanupEarliest(t *testing.T) {
+func TestBufferCleanupOldest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -116,12 +116,12 @@ func TestBufferCleanupEarliest(t *testing.T) {
 	require.Equal(t, 1, b.bufferList.Len())
 
 	mm.EXPECT().Finalize(producer.Dropped)
-	b.dropEarliestUntilTarget(0)
+	b.dropOldestUntilTarget(0)
 	require.Equal(t, uint64(0), b.size.Load())
 	require.Equal(t, 0, b.bufferList.Len())
 }
 
-func TestBufferCleanupEarliestBatch(t *testing.T) {
+func TestBufferCleanupOldestBatch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -144,19 +144,19 @@ func TestBufferCleanupEarliestBatch(t *testing.T) {
 
 	mm.EXPECT().Finalize(producer.Dropped)
 	// Didn't need to iterate through the full batch size to get to target size.
-	shouldContinue := b.dropEarliestBatchUntilTargetWithLock(uint64(450), 2)
+	shouldContinue := b.dropOldestBatchUntilTargetWithListLock(uint64(450), 2)
 	require.False(t, shouldContinue)
 	require.Equal(t, uint64(4*mm.Size()), b.size.Load())
 	require.Equal(t, 4, b.bufferList.Len())
 
 	mm.EXPECT().Finalize(producer.Dropped).Times(2)
-	shouldContinue = b.dropEarliestBatchUntilTargetWithLock(uint64(50), 2)
+	shouldContinue = b.dropOldestBatchUntilTargetWithListLock(uint64(50), 2)
 	require.True(t, shouldContinue)
 	require.Equal(t, uint64(200), b.size.Load())
 	require.Equal(t, 2, b.bufferList.Len())
 
 	mm.EXPECT().Finalize(producer.Dropped).Times(2)
-	b.dropEarliestUntilTarget(0)
+	b.dropOldestUntilTarget(0)
 	require.Equal(t, uint64(0), b.size.Load())
 	require.Equal(t, 0, b.bufferList.Len())
 }
@@ -189,12 +189,12 @@ func TestCleanupBatch(t *testing.T) {
 	front.Value.(*producer.RefCountedMessage).Drop()
 
 	require.Equal(t, 3, b.bufferLen())
-	e, removed := b.cleanupBatchWithLock(front, 2, false)
+	e, removed := b.cleanupBatchWithListLock(front, 2, false)
 	require.Equal(t, 3, int(e.Value.(*producer.RefCountedMessage).Size()))
 	require.Equal(t, 2, b.bufferLen())
 	require.Equal(t, 1, removed)
 
-	e, removed = b.cleanupBatchWithLock(e, 2, false)
+	e, removed = b.cleanupBatchWithListLock(e, 2, false)
 	require.Nil(t, e)
 	require.Equal(t, 2, b.bufferLen())
 	require.Equal(t, 0, removed)
@@ -228,7 +228,7 @@ func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
 	b.bufferList.Front().Value.(*producer.RefCountedMessage).Drop()
 
 	require.Equal(t, 3, b.bufferLen())
-	e, removed := b.cleanupBatchWithLock(b.bufferList.Front(), 1, false)
+	e, removed := b.cleanupBatchWithListLock(b.bufferList.Front(), 1, false)
 	// e stopped at message 2.
 	require.Equal(t, 2, int(e.Value.(*producer.RefCountedMessage).Size()))
 	require.Equal(t, 2, b.bufferLen())
@@ -236,7 +236,7 @@ func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
 	require.NotNil(t, e)
 
 	require.NotNil(t, e.Next())
-	// Mimic A new write triggered DropEarliest and removed message 2.
+	// Mimic A new write triggered DropOldest and removed message 2.
 	b.bufferList.Remove(e)
 	require.Nil(t, e.Next())
 	require.Equal(t, 1, b.bufferLen())
@@ -247,7 +247,7 @@ func TestCleanupBatchWithElementBeingRemovedByOtherThread(t *testing.T) {
 
 	// But next clean batch from the removed element is going to do nothing
 	// because the starting element is already removed.
-	e, removed = b.cleanupBatchWithLock(e, 3, false)
+	e, removed = b.cleanupBatchWithListLock(e, 3, false)
 	require.Equal(t, 1, b.bufferLen())
 	require.Equal(t, 0, removed)
 	require.Nil(t, e)
@@ -339,7 +339,7 @@ func TestBufferCloseDropEverything(t *testing.T) {
 	}
 }
 
-func TestBufferDropEarliestAsyncOnFull(t *testing.T) {
+func TestBufferDropOldestAsyncOnFull(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(t)
@@ -372,11 +372,11 @@ func TestBufferDropEarliestAsyncOnFull(t *testing.T) {
 	mm2 := producer.NewMockMessage(ctrl)
 	mm2.EXPECT().Size().Return(2 * mm.Size()).AnyTimes()
 
-	require.Equal(t, 0, len(b.dropEarliestCh))
+	require.Equal(t, 0, len(b.dropOldestCh))
 	_, err = b.Add(mm2)
 	require.NoError(t, err)
 	require.Equal(t, 500, int(b.size.Load()))
-	require.Equal(t, 1, len(b.dropEarliestCh))
+	require.Equal(t, 1, len(b.dropOldestCh))
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -395,7 +395,7 @@ func TestBufferDropEarliestAsyncOnFull(t *testing.T) {
 	require.Equal(t, 0, int(b.size.Load()))
 }
 
-func TestBufferDropEarliestsyncOnFull(t *testing.T) {
+func TestBufferDropOldestsyncOnFull(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	ctrl := gomock.NewController(t)
@@ -428,14 +428,14 @@ func TestBufferDropEarliestsyncOnFull(t *testing.T) {
 	mm2 := producer.NewMockMessage(ctrl)
 	mm2.EXPECT().Size().Return(2 * mm.Size()).AnyTimes()
 
-	require.Equal(t, 0, len(b.dropEarliestCh))
+	require.Equal(t, 0, len(b.dropOldestCh))
 	mm.EXPECT().Finalize(producer.Dropped).Times(2)
 	// This will trigger dropEarlist synchronizely as it reached
 	// max allowed spill over ratio.
 	_, err = b.Add(mm2)
 	require.NoError(t, err)
 	require.Equal(t, 300, int(b.size.Load()))
-	require.Equal(t, 0, len(b.dropEarliestCh))
+	require.Equal(t, 0, len(b.dropOldestCh))
 }
 
 func TestBufferReturnErrorOnFull(t *testing.T) {
@@ -480,7 +480,7 @@ func mustNewBuffer(t testing.TB, opts Options) *buffer {
 func testOptions() Options {
 	return NewOptions().
 		SetCloseCheckInterval(100 * time.Millisecond).
-		SetDropEarliestInterval(100 * time.Millisecond).
+		SetDropOldestInterval(100 * time.Millisecond).
 		SetCleanupRetryOptions(retry.NewOptions().SetInitialBackoff(100 * time.Millisecond).SetMaxBackoff(200 * time.Millisecond))
 }
 
@@ -494,8 +494,8 @@ func BenchmarkProduce(b *testing.B) {
 
 	buffer := mustNewBuffer(b, NewOptions().
 		SetMaxBufferSize(1000*1000*200).
-		SetDropEarliestInterval(100*time.Millisecond).
-		SetOnFullStrategy(DropEarliest),
+		SetDropOldestInterval(100*time.Millisecond).
+		SetOnFullStrategy(DropOldest),
 	)
 
 	for n := 0; n < b.N; n++ {

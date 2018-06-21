@@ -35,10 +35,10 @@ const (
 	// on new buffer requests when the buffer is full.
 	ReturnError OnFullStrategy = "returnError"
 
-	// DropEarliest means the earlist message in the buffer
+	// DropOldest means the oldest message in the buffer
 	// will be dropped to make room for new buffer requests
 	// when the buffer is full.
-	DropEarliest OnFullStrategy = "dropEarliest"
+	DropOldest OnFullStrategy = "dropOldest"
 )
 
 // Options configs the buffer.
@@ -67,13 +67,13 @@ type Options interface {
 	// SetCloseCheckInterval sets the close check interval.
 	SetCloseCheckInterval(value time.Duration) Options
 
-	// DropEarliestInterval returns the interval to drop earliest buffer.
+	// DropOldestInterval returns the interval to drop oldest buffer.
 	// The max buffer size might be spilled over during the interval.
-	DropEarliestInterval() time.Duration
+	DropOldestInterval() time.Duration
 
-	// SetDropEarliestInterval sets the interval to drop earliest buffer.
+	// SetDropOldestInterval sets the interval to drop oldest buffer.
 	// The max buffer size might be spilled over during the interval.
-	SetDropEarliestInterval(value time.Duration) Options
+	SetDropOldestInterval(value time.Duration) Options
 
 	// ScanBatchSize returns the scan batch size.
 	ScanBatchSize() int
@@ -82,9 +82,9 @@ type Options interface {
 	SetScanBatchSize(value int) Options
 
 	// AllowedSpilloverRatio returns the ratio for allowed buffer spill over,
-	// below which the buffer will drop earliest messages asynchronizely for
+	// below which the buffer will drop oldest messages asynchronizely for
 	// better performance. When the limit for allowed spill over is reached,
-	// the buffer will start to drop earliest messages synchronizely.
+	// the buffer will start to drop oldest messages synchronizely.
 	AllowedSpilloverRatio() float64
 
 	// SetAllowedSpilloverRatio sets the ratio for allowed buffer spill over.

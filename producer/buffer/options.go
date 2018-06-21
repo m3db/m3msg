@@ -32,7 +32,7 @@ const (
 	defaultMaxBufferSize         = 100 * 1024 * 1024 // 100MB.
 	defaultMaxMessageSize        = 1 * 1024 * 1024   // 1MB.
 	defaultCloseCheckInterval    = time.Second
-	defaultDropEarliestInterval  = time.Second
+	defaultDropOldestInterval    = time.Second
 	defaultScanBatchSize         = 16
 	defaultCleanupInitialBackoff = 10 * time.Second
 	defaultAllowedSpilloverRatio = 0.2
@@ -51,7 +51,7 @@ type bufferOptions struct {
 	maxBufferSize         int
 	maxMessageSize        int
 	closeCheckInterval    time.Duration
-	dropEarliestInterval  time.Duration
+	dropOldestInterval    time.Duration
 	scanBatchSize         int
 	allowedSpilloverRatio float64
 	rOpts                 retry.Options
@@ -61,11 +61,11 @@ type bufferOptions struct {
 // NewOptions creates Options.
 func NewOptions() Options {
 	return &bufferOptions{
-		strategy:              DropEarliest,
+		strategy:              DropOldest,
 		maxBufferSize:         defaultMaxBufferSize,
 		maxMessageSize:        defaultMaxMessageSize,
 		closeCheckInterval:    defaultCloseCheckInterval,
-		dropEarliestInterval:  defaultDropEarliestInterval,
+		dropOldestInterval:    defaultDropOldestInterval,
 		scanBatchSize:         defaultScanBatchSize,
 		allowedSpilloverRatio: defaultAllowedSpilloverRatio,
 		rOpts: retry.NewOptions().
@@ -116,13 +116,13 @@ func (opts *bufferOptions) SetCloseCheckInterval(value time.Duration) Options {
 	return &o
 }
 
-func (opts *bufferOptions) DropEarliestInterval() time.Duration {
-	return opts.dropEarliestInterval
+func (opts *bufferOptions) DropOldestInterval() time.Duration {
+	return opts.dropOldestInterval
 }
 
-func (opts *bufferOptions) SetDropEarliestInterval(value time.Duration) Options {
+func (opts *bufferOptions) SetDropOldestInterval(value time.Duration) Options {
 	o := *opts
-	o.dropEarliestInterval = value
+	o.dropOldestInterval = value
 	return &o
 }
 
