@@ -210,7 +210,6 @@ func (w *messageWriterImpl) isValidWriteWithLock(nowNanos int64) bool {
 func (w *messageWriterImpl) write(
 	consumerWriters []consumerWriter,
 	m *message,
-	nowNanos int64,
 ) error {
 	m.IncReads()
 	msg, isValid := m.Marshaler()
@@ -220,12 +219,11 @@ func (w *messageWriterImpl) write(
 	}
 	var (
 		written = false
-		l       = len(consumerWriters)
-		start   = int(nowNanos) % l
 	)
-	for i := start; i < start+l; i++ {
-		idx := i % l
-		if err := consumerWriters[idx].Write(msg); err != nil {
+	for i := len(consumerWriters) - 1; i >= 0; i-- {
+		j := rand.Intn(i + 1)
+		consumerWriters[i], consumerWriters[j] = consumerWriters[j], consumerWriters[i]
+		if err := consumerWriters[i].Write(msg); err != nil {
 			w.m.oneConsumerWriteError.Inc(1)
 			continue
 		}
@@ -303,7 +301,7 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 		e, toBeRetried = w.retryBatchWithLock(e, beforeBatchNanos, batchSize)
 		consumerWriters := w.consumerWriters
 		w.Unlock()
-		err := w.writeBatch(consumerWriters, toBeRetried, beforeBatchNanos)
+		err := w.writeBatch(consumerWriters, toBeRetried)
 		w.m.retryBatchLatency.Record(w.nowFn().Sub(beforeBatch))
 		if err != nil {
 			// When we can't write to any consumer writer, skip the tick
@@ -317,7 +315,6 @@ func (w *messageWriterImpl) retryUnacknowledged() {
 func (w *messageWriterImpl) writeBatch(
 	consumerWriters []consumerWriter,
 	toBeRetried []*message,
-	nowNanos int64,
 ) error {
 	if len(consumerWriters) == 0 {
 		// Not expected in a healthy/valid placement.
@@ -325,7 +322,7 @@ func (w *messageWriterImpl) writeBatch(
 		return errNoWriters
 	}
 	for _, m := range toBeRetried {
-		if err := w.write(consumerWriters, m, nowNanos); err != nil {
+		if err := w.write(consumerWriters, m); err != nil {
 			return err
 		}
 	}
