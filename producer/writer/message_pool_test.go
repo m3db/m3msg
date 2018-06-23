@@ -22,6 +22,7 @@ package writer
 
 import (
 	"testing"
+	"time"
 
 	"github.com/m3db/m3msg/generated/proto/msgpb"
 	"github.com/m3db/m3msg/producer"
@@ -46,7 +47,8 @@ func TestMessagePool(t *testing.T) {
 	m := p.Get()
 	require.Nil(t, m.pb.Value)
 	mm.EXPECT().Bytes().Return([]byte("foo"))
-	m.Set(metadata{}, rm)
+	t1 := time.Unix(100, 200)
+	m.Set(metadata{}, rm, t1)
 	m.SetRetryAtNanos(100)
 
 	pb, ok := m.Marshaler()
@@ -64,9 +66,12 @@ func TestMessagePool(t *testing.T) {
 	m = p.Get()
 	require.Nil(t, m.pb.Value)
 	require.True(t, m.IsDroppedOrConsumed())
+	require.Equal(t, t1, m.InitTime())
 
 	mm.EXPECT().Size().Return(3)
 	mm.EXPECT().Bytes().Return([]byte("foo"))
-	m.Set(metadata{}, producer.NewRefCountedMessage(mm, nil))
+	t2 := time.Unix(200, 300)
+	m.Set(metadata{}, producer.NewRefCountedMessage(mm, nil), t2)
 	require.False(t, m.IsDroppedOrConsumed())
+	require.Equal(t, t2, m.InitTime())
 }
