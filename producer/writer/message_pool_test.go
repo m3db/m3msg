@@ -64,11 +64,11 @@ func TestMessagePool(t *testing.T) {
 	m = p.Get()
 	require.Nil(t, m.pb.Value)
 	require.True(t, m.IsDroppedOrConsumed())
-	require.Equal(t, 500, m.InitNanos())
+	require.Equal(t, int64(500), m.InitNanos())
 
 	mm.EXPECT().Size().Return(3)
 	mm.EXPECT().Bytes().Return([]byte("foo"))
 	m.Set(metadata{}, producer.NewRefCountedMessage(mm, nil), 600)
 	require.False(t, m.IsDroppedOrConsumed())
-	require.Equal(t, 600, m.InitNanos())
+	require.Equal(t, int64(600), m.InitNanos())
 }
