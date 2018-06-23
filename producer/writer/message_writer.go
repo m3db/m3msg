@@ -180,8 +180,7 @@ func newMessageWriter(
 
 func (w *messageWriterImpl) Write(rm *producer.RefCountedMessage) {
 	var (
-		now      = w.nowFn()
-		nowNanos = now.UnixNano()
+		nowNanos = w.nowFn().UnixNano()
 		msg      = w.newMessage()
 	)
 	w.Lock()
@@ -196,7 +195,7 @@ func (w *messageWriterImpl) Write(rm *producer.RefCountedMessage) {
 		shard: w.replicatedShardID,
 		id:    w.msgID,
 	}
-	msg.Set(meta, rm, now)
+	msg.Set(meta, rm, nowNanos)
 	w.acks.add(meta, msg)
 	w.queue.PushBack(msg)
 	w.Unlock()
@@ -573,7 +572,7 @@ func (a *acks) ack(meta metadata) {
 	}
 	delete(a.ackMap, meta)
 	a.Unlock()
-	a.m.messageConsumeLatency.Record(a.nowFn().Sub(m.InitTime()))
+	a.m.messageConsumeLatency.Record(time.Duration(a.nowFn().UnixNano() - m.InitNanos()))
 	m.Ack()
 }
 

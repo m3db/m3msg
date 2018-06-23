@@ -21,8 +21,6 @@
 package writer
 
 import (
-	"time"
-
 	"github.com/m3db/m3msg/generated/proto/msgpb"
 	"github.com/m3db/m3msg/producer"
 	"github.com/m3db/m3msg/protocol/proto"
@@ -35,7 +33,7 @@ type message struct {
 
 	pb           msgpb.Message
 	meta         metadata
-	initTime     time.Time
+	initNanos    int64
 	retryAtNanos int64
 	retried      int
 	// NB(cw) isAcked could be accessed concurrently by the background thread
@@ -52,8 +50,8 @@ func newMessage() *message {
 }
 
 // Set sets the message.
-func (m *message) Set(meta metadata, rm *producer.RefCountedMessage, t time.Time) {
-	m.initTime = t
+func (m *message) Set(meta metadata, rm *producer.RefCountedMessage, initNanos int64) {
+	m.initNanos = initNanos
 	m.meta = meta
 	m.RefCountedMessage = rm
 	m.ToProto(&m.pb)
@@ -67,9 +65,9 @@ func (m *message) Close() {
 	m.ResetProto(&m.pb)
 }
 
-// InitTime returns the time when the message was initiated.
-func (m *message) InitTime() time.Time {
-	return m.initTime
+// InitNanos returns the nanosecond when the message was initiated.
+func (m *message) InitNanos() int64 {
+	return m.initNanos
 }
 
 // RetryAtNanos returns the timestamp for next retry in nano seconds.
