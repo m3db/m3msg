@@ -108,8 +108,7 @@ type consumerWriterImpl struct {
 
 	validConn      *atomic.Bool
 	conn           io.ReadWriteCloser
-	bw             *bufio.Writer
-	br             *bufio.Reader
+	rw             *bufio.ReadWriter
 	lastResetNanos int64
 	resetCh        chan struct{}
 	ack            msgpb.Ack
@@ -134,11 +133,13 @@ func newConsumerWriter(
 
 	var (
 		connOpts = opts.ConnectionOptions()
-		bw       = bufio.NewWriterSize(u, connOpts.WriteBufferSize())
-		br       = bufio.NewReaderSize(u, connOpts.ReadBufferSize())
+		rw       = bufio.NewReadWriter(
+			bufio.NewReaderSize(u, connOpts.ReadBufferSize()),
+			bufio.NewWriterSize(u, connOpts.WriteBufferSize()),
+		)
 	)
 	w := &consumerWriterImpl{
-		encdec:         proto.NewEncodeDecoder(bufio.NewReadWriter(br, bw), opts.EncodeDecoderOptions()),
+		encdec:         proto.NewEncodeDecoder(rw, opts.EncodeDecoderOptions()),
 		addr:           addr,
 		router:         router,
 		opts:           opts,
@@ -148,8 +149,7 @@ func newConsumerWriter(
 		logger:         opts.InstrumentOptions().Logger(),
 		validConn:      atomic.NewBool(false),
 		conn:           u,
-		bw:             bw,
-		br:             br,
+		rw:             rw,
 		lastResetNanos: 0,
 		resetCh:        make(chan struct{}, 1),
 		closed:         atomic.NewBool(false),
@@ -189,7 +189,7 @@ func (w *consumerWriterImpl) Write(m proto.Marshaler) error {
 func (w *consumerWriterImpl) Init() {
 	w.wg.Add(1)
 	go func() {
-		w.resetConnectionUntilClose()
+		w.cleanupConnectionUntilClose()
 		w.wg.Done()
 	}()
 
@@ -200,9 +200,16 @@ func (w *consumerWriterImpl) Init() {
 	}()
 }
 
-func (w *consumerWriterImpl) resetConnectionUntilClose() {
+func (w *consumerWriterImpl) cleanupConnectionUntilClose() {
+	flushTicker := time.NewTicker(w.connOpts.FlushInterval())
+	defer flushTicker.Stop()
+
 	for {
 		select {
+		case <-flushTicker.C:
+			w.encodeLock.Lock()
+			w.rw.Flush()
+			w.encodeLock.Unlock()
 		case <-w.resetCh:
 			// Avoid resetting too frequent.
 			if w.resetTooSoon() {
@@ -314,8 +321,8 @@ func (w *consumerWriterImpl) reset(conn io.ReadWriteCloser) {
 	defer w.encodeLock.Unlock()
 
 	w.conn = conn
-	w.bw.Reset(conn)
-	w.br.Reset(conn)
+	w.rw.Reader.Reset(conn)
+	w.rw.Writer.Reset(conn)
 	w.lastResetNanos = w.nowFn().UnixNano()
 }
 
