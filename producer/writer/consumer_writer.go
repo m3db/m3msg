@@ -189,7 +189,7 @@ func (w *consumerWriterImpl) Write(m proto.Marshaler) error {
 func (w *consumerWriterImpl) Init() {
 	w.wg.Add(1)
 	go func() {
-		w.cleanupConnectionUntilClose()
+		w.resetConnectionUntilClose()
 		w.wg.Done()
 	}()
 
@@ -198,9 +198,15 @@ func (w *consumerWriterImpl) Init() {
 		w.readAcksUntilClose()
 		w.wg.Done()
 	}()
+
+	w.wg.Add(1)
+	go func() {
+		w.flushUntilClose()
+		w.wg.Done()
+	}()
 }
 
-func (w *consumerWriterImpl) cleanupConnectionUntilClose() {
+func (w *consumerWriterImpl) flushUntilClose() {
 	flushTicker := time.NewTicker(w.connOpts.FlushInterval())
 	defer flushTicker.Stop()
 
@@ -210,6 +216,15 @@ func (w *consumerWriterImpl) cleanupConnectionUntilClose() {
 			w.encodeLock.Lock()
 			w.rw.Flush()
 			w.encodeLock.Unlock()
+		case <-w.doneCh:
+			return
+		}
+	}
+}
+
+func (w *consumerWriterImpl) resetConnectionUntilClose() {
+	for {
+		select {
 		case <-w.resetCh:
 			// Avoid resetting too frequent.
 			if w.resetTooSoon() {
