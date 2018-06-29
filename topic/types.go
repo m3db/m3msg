@@ -79,6 +79,12 @@ type ConsumerService interface {
 	// SetConsumptionType sets the consumption type of the consumer service.
 	SetConsumptionType(value ConsumptionType) ConsumerService
 
+	// MessageTTLNanos returns ttl for each message in nanoseconds.
+	MessageTTLNanos() int64
+
+	// SetMessageTTLNanos sets ttl for each message in nanoseconds.
+	SetMessageTTLNanos(value int64) ConsumerService
+
 	// String returns the string representation of the consumer service.
 	String() string
 }

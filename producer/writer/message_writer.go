@@ -45,7 +45,7 @@ type messageWriter interface {
 	Write(rm *producer.RefCountedMessage)
 
 	// Ack acknowledges the metadata.
-	Ack(meta metadata)
+	Ack(meta metadata) bool
 
 	// Init initialize the message writer.
 	Init()
@@ -75,25 +75,32 @@ type messageWriter interface {
 	// SetCutoffNanos sets the cutoff nanoseconds.
 	SetCutoffNanos(nanos int64)
 
+	// MessageTTLNanos returns the message ttl nanoseconds.
+	MessageTTLNanos() int64
+
+	// SetMessageTTLNanos sets the message ttl nanoseconds.
+	SetMessageTTLNanos(nanos int64)
+
 	// QueueSize returns the number of messages queued in the writer.
 	QueueSize() int
 }
 
 type messageWriterMetrics struct {
-	writeSuccess           tally.Counter
-	oneConsumerWriteError  tally.Counter
-	allConsumersWriteError tally.Counter
-	noWritersError         tally.Counter
-	writeAfterCutoff       tally.Counter
-	writeBeforeCutover     tally.Counter
-	messageAcked           tally.Counter
-	messageClosed          tally.Counter
-	messageDropped         tally.Counter
-	messageRetry           tally.Counter
-	messageConsumeLatency  tally.Timer
-	messageWriteDelay      tally.Timer
-	scanBatchLatency       tally.Timer
-	scanTotalLatency       tally.Timer
+	writeSuccess             tally.Counter
+	oneConsumerWriteError    tally.Counter
+	allConsumersWriteError   tally.Counter
+	noWritersError           tally.Counter
+	writeAfterCutoff         tally.Counter
+	writeBeforeCutover       tally.Counter
+	messageAcked             tally.Counter
+	messageClosed            tally.Counter
+	messageDroppedBufferFull tally.Counter
+	messageDroppedTTLExpire  tally.Counter
+	messageRetry             tally.Counter
+	messageConsumeLatency    tally.Timer
+	messageWriteDelay        tally.Timer
+	scanBatchLatency         tally.Timer
+	scanTotalLatency         tally.Timer
 }
 
 func newMessageWriterMetrics(
@@ -115,9 +122,14 @@ func newMessageWriterMetrics(
 		writeBeforeCutover: scope.
 			Tagged(map[string]string{"reason": "before-cutover"}).
 			Counter("invalid-write"),
-		messageAcked:          scope.Counter("message-acked"),
-		messageClosed:         scope.Counter("message-closed"),
-		messageDropped:        scope.Counter("message-dropped"),
+		messageAcked:  scope.Counter("message-acked"),
+		messageClosed: scope.Counter("message-closed"),
+		messageDroppedBufferFull: scope.Tagged(
+			map[string]string{"reason": "buffer-full"},
+		).Counter("message-dropped"),
+		messageDroppedTTLExpire: scope.Tagged(
+			map[string]string{"reason": "ttl-expire"},
+		).Counter("message-dropped"),
 		messageRetry:          scope.Counter("message-retry"),
 		messageConsumeLatency: instrument.MustCreateSampledTimer(scope.Timer("message-consume-latency"), samplingRate),
 		messageWriteDelay:     instrument.MustCreateSampledTimer(scope.Timer("message-write-delay"), samplingRate),
@@ -142,6 +154,7 @@ type messageWriterImpl struct {
 	acks             *acks
 	cutOffNanos      int64
 	cutOverNanos     int64
+	messageTTLNanos  int64
 	msgsToWrite      []*message
 	isClosed         bool
 	doneCh           chan struct{}
@@ -268,8 +281,8 @@ func (w *messageWriterImpl) nextRetryNanos(writeTimes int, nowNanos int64) int64
 	return nowNanos + backoff
 }
 
-func (w *messageWriterImpl) Ack(meta metadata) {
-	w.acks.ack(meta)
+func (w *messageWriterImpl) Ack(meta metadata) bool {
+	return w.acks.ack(meta)
 }
 
 func (w *messageWriterImpl) Init() {
@@ -402,6 +415,17 @@ func (w *messageWriterImpl) scanBatchWithLock(
 			}
 			continue
 		}
+		// If the message exceeded its allowed ttl of the consumer service,
+		// remove it from the buffer.
+		if w.messageTTLNanos > 0 && m.InitNanos()+w.messageTTLNanos <= nowNanos {
+			// There is a chance the message was acked right before the ack is
+			// called, in which case just remove it from the queue.
+			if w.Ack(m.Metadata()) {
+				w.m.messageDroppedTTLExpire.Inc(1)
+			}
+			w.removeFromQueueWithLock(e, m)
+			continue
+		}
 		if m.IsAcked() {
 			w.removeFromQueueWithLock(e, m)
 			w.m.messageAcked.Inc(1)
@@ -417,7 +441,7 @@ func (w *messageWriterImpl) scanBatchWithLock(
 			}
 			w.acks.remove(m.Metadata())
 			w.removeFromQueueWithLock(e, m)
-			w.m.messageDropped.Inc(1)
+			w.m.messageDroppedBufferFull.Inc(1)
 			continue
 		}
 		m.IncWriteTimes()
@@ -495,6 +519,19 @@ func (w *messageWriterImpl) CutoverNanos() int64 {
 func (w *messageWriterImpl) SetCutoverNanos(nanos int64) {
 	w.Lock()
 	w.cutOverNanos = nanos
+	w.Unlock()
+}
+
+func (w *messageWriterImpl) MessageTTLNanos() int64 {
+	w.RLock()
+	res := w.messageTTLNanos
+	w.RUnlock()
+	return res
+}
+
+func (w *messageWriterImpl) SetMessageTTLNanos(nanos int64) {
+	w.Lock()
+	w.messageTTLNanos = nanos
 	w.Unlock()
 }
 
@@ -583,18 +620,19 @@ func (a *acks) remove(meta metadata) {
 	a.Unlock()
 }
 
-func (a *acks) ack(meta metadata) {
+func (a *acks) ack(meta metadata) bool {
 	a.Lock()
 	m, ok := a.ackMap[meta]
 	if !ok {
 		a.Unlock()
 		// Acking a message that is already acked, which is ok.
-		return
+		return false
 	}
 	delete(a.ackMap, meta)
 	a.Unlock()
 	a.m.messageConsumeLatency.Record(time.Duration(a.nowFn().UnixNano() - m.InitNanos()))
 	m.Ack()
+	return true
 }
 
 func (a *acks) size() int {

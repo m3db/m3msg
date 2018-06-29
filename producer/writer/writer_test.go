@@ -230,6 +230,7 @@ func TestWriterRegisterFilter(t *testing.T) {
 	w.RegisterFilter(sid1, filter)
 
 	csw1.EXPECT().RegisterFilter(gomock.Any())
+	csw1.EXPECT().SetMessageTTLNanos(int64(0))
 	testTopic := topic.NewTopic().
 		SetName(opts.TopicName()).
 		SetNumberOfShards(6).
@@ -372,7 +373,7 @@ func TestTopicUpdateWithSameConsumerServicesButDifferentOrder(t *testing.T) {
 	sid1 := services.NewServiceID().SetName("s1")
 	cs1 := topic.NewConsumerService().SetConsumptionType(topic.Replicated).SetServiceID(sid1)
 	sid2 := services.NewServiceID().SetName("s2")
-	cs2 := topic.NewConsumerService().SetConsumptionType(topic.Shared).SetServiceID(sid2)
+	cs2 := topic.NewConsumerService().SetConsumptionType(topic.Shared).SetServiceID(sid2).SetMessageTTLNanos(500)
 	testTopic := topic.NewTopic().
 		SetName(opts.TopicName()).
 		SetNumberOfShards(1).
@@ -437,6 +438,8 @@ func TestTopicUpdateWithSameConsumerServicesButDifferentOrder(t *testing.T) {
 	w.consumerServiceWriters[cs2.ServiceID().String()] = cswMock2
 	defer csw.Close()
 
+	cswMock1.EXPECT().SetMessageTTLNanos(int64(0))
+	cswMock2.EXPECT().SetMessageTTLNanos(int64(500))
 	testTopic = testTopic.
 		SetConsumerServices([]topic.ConsumerService{cs2, cs1}).
 		SetVersion(1)

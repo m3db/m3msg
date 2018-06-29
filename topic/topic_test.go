@@ -22,6 +22,7 @@ package topic
 
 import (
 	"testing"
+	"time"
 
 	"github.com/m3db/m3cluster/services"
 
@@ -119,7 +120,8 @@ func TestTopicString(t *testing.T) {
 			SetName("s2").
 			SetEnvironment("env2").
 			SetZone("zone2"),
-		)
+		).
+		SetMessageTTLNanos(int64(time.Minute))
 	tpc := NewTopic().
 		SetName("testName").
 		SetNumberOfShards(1024).
@@ -134,7 +136,7 @@ func TestTopicString(t *testing.T) {
 	numOfShards: 1024
 	consumerServices: {
 		{service: [name: s1, env: env1, zone: zone1], consumption type: shared}
-		{service: [name: s2, env: env2, zone: zone2], consumption type: shared}
+		{service: [name: s2, env: env2, zone: zone2], consumption type: shared, ttl: 1m0s}
 	}
 }
 `
@@ -186,8 +188,9 @@ func TestTopicValidation(t *testing.T) {
 
 func TestConsumerService(t *testing.T) {
 	sid := services.NewServiceID().SetName("s").SetEnvironment("env").SetZone("zone")
-	cs := NewConsumerService().SetConsumptionType(Shared).SetServiceID(sid)
+	cs := NewConsumerService().SetConsumptionType(Shared).SetServiceID(sid).SetMessageTTLNanos(int64(time.Second))
 	require.Equal(t, sid, cs.ServiceID())
 	require.Equal(t, Shared, cs.ConsumptionType())
-	require.Equal(t, "{service: [name: s, env: env, zone: zone], consumption type: shared}", cs.String())
+	require.Equal(t, int64(time.Second), cs.MessageTTLNanos())
+	require.Equal(t, "{service: [name: s, env: env, zone: zone], consumption type: shared, ttl: 1s}", cs.String())
 }

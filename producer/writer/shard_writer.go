@@ -40,6 +40,9 @@ type shardWriter interface {
 		cws map[string]consumerWriter,
 	)
 
+	// SetMessageTTLNanos sets the message ttl nanoseconds.
+	SetMessageTTLNanos(value int64)
+
 	// Close closes the shard writer.
 	Close()
 
@@ -110,6 +113,10 @@ func (w *sharedShardWriter) Close() {
 
 func (w *sharedShardWriter) QueueSize() int {
 	return w.mw.QueueSize()
+}
+
+func (w *sharedShardWriter) SetMessageTTLNanos(value int64) {
+	w.mw.SetMessageTTLNanos(value)
 }
 
 type replicatedShardWriter struct {
@@ -268,6 +275,14 @@ func (w *replicatedShardWriter) QueueSize() int {
 	}
 	w.RUnlock()
 	return l
+}
+
+func (w *replicatedShardWriter) SetMessageTTLNanos(value int64) {
+	w.RLock()
+	for _, mw := range w.messageWriters {
+		mw.SetMessageTTLNanos(value)
+	}
+	w.RUnlock()
 }
 
 func anyKeyValueInMap(
