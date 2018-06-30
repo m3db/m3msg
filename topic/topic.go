@@ -138,6 +138,21 @@ func (t *topic) RemoveConsumerService(value services.ServiceID) (Topic, error) {
 	return nil, fmt.Errorf("could not find consumer service %s in the topic", value.String())
 }
 
+func (t *topic) UpdateConsumerService(value ConsumerService) (Topic, error) {
+	css := t.ConsumerServices()
+	for i, cs := range css {
+		if cs.ServiceID().String() != value.ServiceID().String() {
+			continue
+		}
+		if value.ConsumptionType() != cs.ConsumptionType() {
+			return nil, fmt.Errorf("could not change consumption type for consumer service %s", value.ServiceID().String())
+		}
+		css[i] = value
+		return t.SetConsumerServices(css), nil
+	}
+	return nil, fmt.Errorf("could not find consumer service %s in the topic", value.String())
+}
+
 func (t *topic) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("\n{\n")

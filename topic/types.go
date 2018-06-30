@@ -58,6 +58,9 @@ type Topic interface {
 	// RemoveConsumerService removes a consumer from the topic.
 	RemoveConsumerService(value services.ServiceID) (Topic, error)
 
+	// UpdateConsumerService updates a consumer in the topic.
+	UpdateConsumerService(value ConsumerService) (Topic, error)
+
 	// String returns the string representation of the topic.
 	String() string
 
