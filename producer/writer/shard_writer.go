@@ -128,11 +128,12 @@ type replicatedShardWriter struct {
 	opts           Options
 	logger         log.Logger
 
-	ackRouter      ackRouter
-	replicaID      uint32
-	messageWriters map[string]messageWriter
-	isClosed       bool
-	m              messageWriterMetrics
+	ackRouter       ackRouter
+	replicaID       uint32
+	messageTTLNanos int64
+	messageWriters  map[string]messageWriter
+	isClosed        bool
+	m               messageWriterMetrics
 }
 
 func newReplicatedShardWriter(
@@ -224,6 +225,7 @@ func (w *replicatedShardWriter) UpdateInstances(
 
 	w.Lock()
 	w.messageWriters = newMessageWriters
+	w.setMessageTTLNanosWithLock(w.messageTTLNanos)
 	w.Unlock()
 
 	// If there are less instances for this shard, this happens when user
@@ -278,11 +280,16 @@ func (w *replicatedShardWriter) QueueSize() int {
 }
 
 func (w *replicatedShardWriter) SetMessageTTLNanos(value int64) {
-	w.RLock()
+	w.Lock()
+	w.messageTTLNanos = value
+	w.setMessageTTLNanosWithLock(value)
+	w.Unlock()
+}
+
+func (w *replicatedShardWriter) setMessageTTLNanosWithLock(value int64) {
 	for _, mw := range w.messageWriters {
 		mw.SetMessageTTLNanos(value)
 	}
-	w.RUnlock()
 }
 
 func anyKeyValueInMap(
