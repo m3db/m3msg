@@ -428,7 +428,6 @@ func (w *messageWriterImpl) scanBatchWithLock(
 		}
 		if m.IsAcked() {
 			w.removeFromQueueWithLock(e, m)
-			w.m.messageAcked.Inc(1)
 			continue
 		}
 		if m.IsDroppedOrConsumed() {
@@ -631,6 +630,7 @@ func (a *acks) ack(meta metadata) bool {
 	delete(a.ackMap, meta)
 	a.Unlock()
 	a.m.messageConsumeLatency.Record(time.Duration(a.nowFn().UnixNano() - m.InitNanos()))
+	a.m.messageAcked.Inc(1)
 	m.Ack()
 	return true
 }

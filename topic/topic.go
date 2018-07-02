@@ -118,7 +118,7 @@ func (t *topic) SetVersion(value int) Topic {
 func (t *topic) AddConsumerService(value ConsumerService) (Topic, error) {
 	cur := t.ConsumerServices()
 	for _, cs := range cur {
-		if cs.ServiceID().String() == value.ServiceID().String() {
+		if cs.ServiceID().Equal(value.ServiceID()) {
 			return nil, fmt.Errorf("service %s is already consuming the topic", value.ServiceID().String())
 		}
 	}
@@ -129,7 +129,7 @@ func (t *topic) AddConsumerService(value ConsumerService) (Topic, error) {
 func (t *topic) RemoveConsumerService(value services.ServiceID) (Topic, error) {
 	cur := t.ConsumerServices()
 	for i, cs := range cur {
-		if cs.ServiceID().String() == value.String() {
+		if cs.ServiceID().Equal(value) {
 			cur = append(cur[:i], cur[i+1:]...)
 			return t.SetConsumerServices(cur), nil
 		}
@@ -141,7 +141,7 @@ func (t *topic) RemoveConsumerService(value services.ServiceID) (Topic, error) {
 func (t *topic) UpdateConsumerService(value ConsumerService) (Topic, error) {
 	css := t.ConsumerServices()
 	for i, cs := range css {
-		if cs.ServiceID().String() != value.ServiceID().String() {
+		if !cs.ServiceID().Equal(value.ServiceID()) {
 			continue
 		}
 		if value.ConsumptionType() != cs.ConsumptionType() {
