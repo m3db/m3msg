@@ -744,6 +744,34 @@ func TestMessageWriterCloseCleanupAllMessages(t *testing.T) {
 	require.True(t, isEmptyWithLock(w.acks))
 }
 
+func TestMessageWriterQueueFullScanOnWriteErrors(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	opts := testOptions().SetMessageQueueScanBatchSize(1)
+	w := newMessageWriter(200, nil, opts, testMessageWriterMetrics()).(*messageWriterImpl)
+	w.AddConsumerWriter(newConsumerWriter("bad", nil, opts, testConsumerWriterMetrics()))
+
+	mm1 := producer.NewMockMessage(ctrl)
+	mm1.EXPECT().Size().Return(3)
+	mm1.EXPECT().Bytes().Return([]byte("foo"))
+	rm1 := producer.NewRefCountedMessage(mm1, nil)
+	w.Write(rm1)
+	require.Equal(t, 1, w.queue.Len())
+
+	mm2 := producer.NewMockMessage(ctrl)
+	mm2.EXPECT().Size().Return(3)
+	mm2.EXPECT().Bytes().Return([]byte("foo"))
+	rm2 := producer.NewRefCountedMessage(mm2, nil)
+	w.Write(rm2)
+	require.Equal(t, 2, w.queue.Len())
+
+	mm1.EXPECT().Finalize(producer.Dropped)
+	rm1.Drop()
+	w.scanMessageQueue()
+	require.Equal(t, 1, w.queue.Len())
+}
+
 func isEmptyWithLock(h *acks) bool {
 	h.Lock()
 	defer h.Unlock()

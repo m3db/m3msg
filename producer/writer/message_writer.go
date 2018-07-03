@@ -282,7 +282,13 @@ func (w *messageWriterImpl) nextRetryNanos(writeTimes int, nowNanos int64) int64
 }
 
 func (w *messageWriterImpl) Ack(meta metadata) bool {
-	return w.acks.ack(meta)
+	acked, initNanos := w.acks.ack(meta)
+	if acked {
+		w.m.messageConsumeLatency.Record(time.Duration(w.nowFn().UnixNano() - initNanos))
+		w.m.messageAcked.Inc(1)
+		return true
+	}
+	return false
 }
 
 func (w *messageWriterImpl) Init() {
@@ -326,6 +332,7 @@ func (w *messageWriterImpl) scanMessageQueue() {
 		consumerWriters  []consumerWriter
 		iterationIndexes []int
 		fullScan         = isClosed || beforeScan.After(w.nextFullScan)
+		skipWrites       bool
 	)
 	for e != nil {
 		beforeBatch := w.nowFn()
@@ -335,18 +342,22 @@ func (w *messageWriterImpl) scanMessageQueue() {
 		consumerWriters = w.consumerWriters
 		iterationIndexes = w.iterationIndexes
 		w.Unlock()
-		err := w.writeBatch(iterationIndexes, consumerWriters, msgsToWrite)
-		w.m.scanBatchLatency.Record(w.nowFn().Sub(beforeBatch))
-		if err != nil {
-			// When we can't write to any consumer writer, skip the tick
-			// to avoid meaningless attempts, wait for next tick to retry.
-			break
-		}
 		if !fullScan && len(msgsToWrite) == 0 {
+			w.m.scanBatchLatency.Record(w.nowFn().Sub(beforeBatch))
 			// If this is not a full scan, abort after the iteration batch
 			// that no new messages were found.
 			break
 		}
+		if skipWrites {
+			w.m.scanBatchLatency.Record(w.nowFn().Sub(beforeBatch))
+			continue
+		}
+		if err := w.writeBatch(iterationIndexes, consumerWriters, msgsToWrite); err != nil {
+			// When we can't write to any consumer writer, skip the writes in this scan
+			// to avoid meaningless attempts but continue to clean up the queue.
+			skipWrites = true
+		}
+		w.m.scanBatchLatency.Record(w.nowFn().Sub(beforeBatch))
 	}
 	afterScan := w.nowFn()
 	w.m.scanTotalLatency.Record(afterScan.Sub(beforeScan))
@@ -402,7 +413,7 @@ func (w *messageWriterImpl) scanBatchWithLock(
 			// So that the unacked messages for the unhealthy consumer services
 			// do not stay in memory forever.
 			// NB: The message must be added to the ack map to be acked here.
-			w.Ack(m.Metadata())
+			w.acks.ack(m.Metadata())
 			w.removeFromQueueWithLock(e, m)
 			w.m.messageClosed.Inc(1)
 			continue
@@ -420,7 +431,7 @@ func (w *messageWriterImpl) scanBatchWithLock(
 		if w.messageTTLNanos > 0 && m.InitNanos()+w.messageTTLNanos <= nowNanos {
 			// There is a chance the message was acked right before the ack is
 			// called, in which case just remove it from the queue.
-			if w.Ack(m.Metadata()) {
+			if acked, _ := w.acks.ack(m.Metadata()); acked {
 				w.m.messageDroppedTTLExpire.Inc(1)
 			}
 			w.removeFromQueueWithLock(e, m)
@@ -619,20 +630,19 @@ func (a *acks) remove(meta metadata) {
 	a.Unlock()
 }
 
-func (a *acks) ack(meta metadata) bool {
+func (a *acks) ack(meta metadata) (bool, int64) {
 	a.Lock()
 	m, ok := a.ackMap[meta]
 	if !ok {
 		a.Unlock()
 		// Acking a message that is already acked, which is ok.
-		return false
+		return false, 0
 	}
 	delete(a.ackMap, meta)
 	a.Unlock()
-	a.m.messageConsumeLatency.Record(time.Duration(a.nowFn().UnixNano() - m.InitNanos()))
-	a.m.messageAcked.Inc(1)
+	initNanos := m.InitNanos()
 	m.Ack()
-	return true
+	return true, initNanos
 }
 
 func (a *acks) size() int {
