@@ -183,7 +183,7 @@ func newMessageWriter(
 		r:                 rand.New(rand.NewSource(nowFn().UnixNano())),
 		msgID:             0,
 		queue:             list.New(),
-		acks:              newAckHelper(opts.InitialAckMapSize(), m, nowFn),
+		acks:              newAckHelper(opts.InitialAckMapSize()),
 		cutOffNanos:       0,
 		cutOverNanos:      0,
 		msgsToWrite:       make([]*message, 0, opts.MessageQueueScanBatchSize()),
@@ -604,17 +604,12 @@ type acks struct {
 	sync.Mutex
 
 	ackMap map[metadata]*message
-	m      messageWriterMetrics
-
-	nowFn clock.NowFn
 }
 
 // nolint: unparam
-func newAckHelper(size int, m messageWriterMetrics, nowFn clock.NowFn) *acks {
+func newAckHelper(size int) *acks {
 	return &acks{
 		ackMap: make(map[metadata]*message, size),
-		m:      m,
-		nowFn:  nowFn,
 	}
 }
 
