@@ -43,14 +43,18 @@ type Unmarshaler interface {
 
 // Encoder encodes the marshaler.
 type Encoder interface {
-	// Encode encodes the marshaler.
-	Encode(m Marshaler) error
+	// Encode encodes the marshaler. The bytes returned could be reused by
+	// the next encode call.
+	Encode(m Marshaler) ([]byte, error)
 }
 
 // Decoder decodes into an unmarshaler.
 type Decoder interface {
 	// Decode decodes the unmarshaler.
 	Decode(m Unmarshaler) error
+
+	// ResetReader resets the reader.
+	ResetReader(r io.Reader)
 }
 
 // EncodeDecoder can encode and decode.
@@ -60,9 +64,6 @@ type EncodeDecoder interface {
 
 	// Close closes the EncodeDecoder.
 	Close()
-
-	// Reset resets the EncodeDecoder.
-	Reset(rw io.ReadWriter)
 }
 
 // EncodeDecoderPool is a pool of EncodeDecoders.

@@ -22,63 +22,47 @@ package proto
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/m3db/m3x/pool"
 )
 
 type encoder struct {
-	w              io.Writer
 	buffer         []byte
 	bytesPool      pool.BytesPool
 	maxMessageSize int
 }
 
 // NewEncoder creates a new encoder, the implementation is not thread safe.
-func NewEncoder(w io.Writer, opts BaseOptions) Encoder {
-	return newEncoder(w, opts)
-}
-
-func newEncoder(w io.Writer, opts BaseOptions) *encoder {
+func NewEncoder(opts BaseOptions) Encoder {
 	if opts == nil {
 		opts = NewBaseOptions()
 	}
 	pool := opts.BytesPool()
 	return &encoder{
-		w:              w,
 		buffer:         getByteSliceWithLength(sizeEncodingLength, pool),
 		bytesPool:      pool,
 		maxMessageSize: opts.MaxMessageSize(),
 	}
 }
 
-func (e *encoder) Encode(m Marshaler) error {
+func (e *encoder) Encode(m Marshaler) ([]byte, error) {
 	size := m.Size()
 	if size > e.maxMessageSize {
-		return fmt.Errorf("message size %d is larger than maximum supported size %d", size, e.maxMessageSize)
+		return nil, fmt.Errorf("message size %d is larger than maximum supported size %d", size, e.maxMessageSize)
 	}
-	if err := e.encodeSize(size); err != nil {
-		return err
+	e.buffer = growDataBufferIfNeeded(e.buffer, sizeEncodingLength+size, e.bytesPool)
+	e.encodeSize(size)
+	if err := e.encodeData(e.buffer[sizeEncodingLength:], m); err != nil {
+		return nil, err
 	}
-	return e.encodeData(m, size)
+	return e.buffer[:sizeEncodingLength+size], nil
 }
 
-func (e *encoder) encodeSize(size int) error {
+func (e *encoder) encodeSize(size int) {
 	sizeEncodeDecoder.PutUint32(e.buffer, uint32(size))
-	_, err := e.w.Write(e.buffer[:sizeEncodingLength])
-	return err
 }
 
-func (e *encoder) encodeData(m Marshaler, size int) error {
-	e.buffer = growDataBufferIfNeeded(e.buffer, size, e.bytesPool)
-	size, err := m.MarshalTo(e.buffer)
-	if err != nil {
-		return err
-	}
-	_, err = e.w.Write(e.buffer[:size])
+func (e *encoder) encodeData(buffer []byte, m Marshaler) error {
+	_, err := m.MarshalTo(buffer)
 	return err
-}
-
-func (e *encoder) resetWriter(w io.Writer) {
-	e.w = w
 }
