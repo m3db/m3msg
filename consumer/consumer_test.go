@@ -171,7 +171,7 @@ func TestConsumerAckError(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, testMsg1.Value, m.Bytes())
 
-	mockEncoder.EXPECT().Encode(gomock.Any()).Return(nil, errors.New("mock encode err"))
+	mockEncoder.EXPECT().Encode(gomock.Any()).Return(errors.New("mock encode err"))
 	m.Ack()
 
 	_, err = cc.Message()
@@ -247,7 +247,8 @@ func TestConsumerAckBuffer(t *testing.T) {
 	m1.Ack()
 
 	// Second ack will trigger encode.
-	mockEncoder.EXPECT().Encode(gomock.Any()).Return(nil, nil)
+	mockEncoder.EXPECT().Encode(gomock.Any())
+	mockEncoder.EXPECT().Bytes()
 	m2.Ack()
 }
 
@@ -286,7 +287,8 @@ func TestConsumerAckAfterClosed(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, testMsg2.Value, m2.Bytes())
 
-	mockEncoder.EXPECT().Encode(gomock.Any()).Return(nil, nil)
+	mockEncoder.EXPECT().Encode(gomock.Any())
+	mockEncoder.EXPECT().Bytes()
 	m1.Ack()
 
 	cc.Close()
@@ -328,7 +330,8 @@ func TestConsumerTimeBasedFlush(t *testing.T) {
 	m1.Ack()
 	require.Equal(t, 1, len(cc.ackPb.Metadata))
 
-	mockEncoder.EXPECT().Encode(gomock.Any()).Return(nil, nil)
+	mockEncoder.EXPECT().Encode(gomock.Any())
+	mockEncoder.EXPECT().Bytes()
 	cc.Init()
 	cc.Close()
 }
@@ -368,7 +371,8 @@ func TestConsumerFlushAcksOnClose(t *testing.T) {
 	m1.Ack()
 	require.Equal(t, 1, len(cc.ackPb.Metadata))
 
-	mockEncoder.EXPECT().Encode(gomock.Any()).Return(nil, nil)
+	mockEncoder.EXPECT().Encode(gomock.Any()).Return(nil)
+	mockEncoder.EXPECT().Bytes()
 	cc.Close()
 }
 
@@ -417,10 +421,10 @@ func testOptions() Options {
 }
 
 func produce(w io.Writer, m proto.Marshaler) error {
-	data, err := testEncoder.Encode(m)
+	err := testEncoder.Encode(m)
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(data)
+	_, err = w.Write(testEncoder.Bytes())
 	return err
 }

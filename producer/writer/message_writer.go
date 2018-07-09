@@ -245,7 +245,7 @@ func (w *messageWriterImpl) write(
 	}
 	// The write function is accessed through only one thread,
 	// so no lock is required for encoding.
-	data, err := w.encoder.Encode(msg)
+	err := w.encoder.Encode(msg)
 	m.DecReads()
 	if err != nil {
 		return err
@@ -254,7 +254,7 @@ func (w *messageWriterImpl) write(
 		written = false
 	)
 	for i := len(iterationIndexes) - 1; i >= 0; i-- {
-		if err := consumerWriters[randIndex(iterationIndexes, i)].Write(data); err != nil {
+		if err := consumerWriters[randIndex(iterationIndexes, i)].Write(w.encoder.Bytes()); err != nil {
 			w.m.oneConsumerWriteError.Inc(1)
 			continue
 		}

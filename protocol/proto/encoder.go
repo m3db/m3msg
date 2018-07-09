@@ -30,6 +30,7 @@ type encoder struct {
 	buffer         []byte
 	bytesPool      pool.BytesPool
 	maxMessageSize int
+	encoded        int
 }
 
 // NewEncoder creates a new encoder, the implementation is not thread safe.
@@ -45,17 +46,22 @@ func NewEncoder(opts BaseOptions) Encoder {
 	}
 }
 
-func (e *encoder) Encode(m Marshaler) ([]byte, error) {
+func (e *encoder) Encode(m Marshaler) error {
 	size := m.Size()
 	if size > e.maxMessageSize {
-		return nil, fmt.Errorf("message size %d is larger than maximum supported size %d", size, e.maxMessageSize)
+		return fmt.Errorf("message size %d is larger than maximum supported size %d", size, e.maxMessageSize)
 	}
 	e.buffer = growDataBufferIfNeeded(e.buffer, sizeEncodingLength+size, e.bytesPool)
 	e.encodeSize(size)
 	if err := e.encodeData(e.buffer[sizeEncodingLength:], m); err != nil {
-		return nil, err
+		return err
 	}
-	return e.buffer[:sizeEncodingLength+size], nil
+	e.encoded = sizeEncodingLength + size
+	return nil
+}
+
+func (e *encoder) Bytes() []byte {
+	return e.buffer[:e.encoded]
 }
 
 func (e *encoder) encodeSize(size int) {

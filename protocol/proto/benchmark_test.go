@@ -39,11 +39,11 @@ func BenchmarkEncodeDecoderRoundTrip(b *testing.B) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		encodeMsg.Metadata.Id = uint64(n)
-		data, err := c.Encode(&encodeMsg)
+		err := c.Encode(&encodeMsg)
 		if err != nil {
 			b.FailNow()
 		}
-		r.Reset(data)
+		r.Reset(c.Bytes())
 		if err := c.Decode(&decodeMsg); err != nil {
 			b.FailNow()
 		}
@@ -66,11 +66,11 @@ func BenchmarkBaseEncodeDecodeRoundTrip(b *testing.B) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		encodeMsg.Metadata.Id = uint64(n)
-		data, err := encoder.Encode(&encodeMsg)
+		err := encoder.Encode(&encodeMsg)
 		if err != nil {
 			b.FailNow()
 		}
-		r.Reset(data)
+		r.Reset(encoder.Bytes())
 		if err := decoder.Decode(&decodeMsg); err != nil {
 			b.FailNow()
 		}

@@ -455,13 +455,12 @@ func TestConsumerServiceWriterWithReplicatedConsumerWithShardedPlacement(t *test
 				conn.Close()
 				continue
 			}
-			b, err := server.Encode(&msgpb.Ack{
+			require.NoError(t, server.Encode(&msgpb.Ack{
 				Metadata: []msgpb.Metadata{
 					msg.Metadata,
 				},
-			})
-			require.NoError(t, err)
-			_, err = conn.Write(b)
+			}))
+			_, err = conn.Write(server.Bytes())
 			require.NoError(t, err)
 			conn.Close()
 		}

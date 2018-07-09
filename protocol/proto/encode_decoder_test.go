@@ -57,9 +57,8 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		Value: make([]byte, 10),
 	}
 	go func() {
-		data, err := c.Encode(&testMsg)
-		require.NoError(t, err)
-		_, err = clientConn.Write(data)
+		require.NoError(t, c.Encode(&testMsg))
+		_, err := clientConn.Write(c.Bytes())
 		require.NoError(t, err)
 	}()
 	var msg msgpb.Message

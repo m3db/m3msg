@@ -50,11 +50,20 @@ func (_m *MockEncoder) EXPECT() *_MockEncoderRecorder {
 	return _m.recorder
 }
 
-func (_m *MockEncoder) Encode(_param0 Marshaler) ([]byte, error) {
-	ret := _m.ctrl.Call(_m, "Encode", _param0)
+func (_m *MockEncoder) Bytes() []byte {
+	ret := _m.ctrl.Call(_m, "Bytes")
 	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
+}
+
+func (_mr *_MockEncoderRecorder) Bytes() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Bytes")
+}
+
+func (_m *MockEncoder) Encode(_param0 Marshaler) error {
+	ret := _m.ctrl.Call(_m, "Encode", _param0)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 func (_mr *_MockEncoderRecorder) Encode(arg0 interface{}) *gomock.Call {

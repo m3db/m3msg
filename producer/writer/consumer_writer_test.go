@@ -392,13 +392,13 @@ func testConsumeAndAckOnConnection(
 	var msg msgpb.Message
 	assert.NoError(t, server.Decode(&msg))
 
-	data, err := server.Encode(&msgpb.Ack{
+	err := server.Encode(&msgpb.Ack{
 		Metadata: []msgpb.Metadata{
 			msg.Metadata,
 		},
 	})
 	assert.NoError(t, err)
-	_, err = conn.Write(data)
+	_, err = conn.Write(server.Bytes())
 	assert.NoError(t, err)
 }
 
@@ -419,9 +419,9 @@ func testConsumerWriterMetrics() consumerWriterMetrics {
 }
 
 func write(w consumerWriter, m proto.Marshaler) error {
-	b, err := testEncoder.Encode(m)
+	err := testEncoder.Encode(m)
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
-	return w.Write(b)
+	return w.Write(testEncoder.Bytes())
 }

@@ -43,9 +43,12 @@ type Unmarshaler interface {
 
 // Encoder encodes the marshaler.
 type Encoder interface {
-	// Encode encodes the marshaler. The bytes returned could be reused by
+	// Encode encodes the marshaler.
+	Encode(m Marshaler) error
+
+	// Bytes returns the encoded bytes, the bytes could be reused by
 	// the next encode call.
-	Encode(m Marshaler) ([]byte, error)
+	Bytes() []byte
 }
 
 // Decoder decodes into an unmarshaler.

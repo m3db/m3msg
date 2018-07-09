@@ -48,14 +48,6 @@ func NewEncodeDecoder(
 	}
 }
 
-func (c *encdec) Encode(m Marshaler) ([]byte, error) {
-	return c.Encoder.Encode(m)
-}
-
-func (c *encdec) Decode(acks Unmarshaler) error {
-	return c.Decoder.Decode(acks)
-}
-
 func (c *encdec) Close() {
 	if c.isClosed {
 		return

@@ -189,13 +189,13 @@ func (c *consumer) tryAckAndFlush() {
 }
 
 func (c *consumer) encodeAckWithLock(ackLen int) error {
-	b, err := c.encoder.Encode(&c.ackPb)
+	err := c.encoder.Encode(&c.ackPb)
 	c.ackPb.Metadata = c.ackPb.Metadata[:0]
 	if err != nil {
 		c.m.ackEncodeError.Inc(1)
 		return err
 	}
-	_, err = c.w.Write(b)
+	_, err = c.w.Write(c.encoder.Bytes())
 	if err != nil {
 		c.m.ackWriteError.Inc(1)
 		return err

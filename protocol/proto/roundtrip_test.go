@@ -34,6 +34,7 @@ func TestBaseEncodeDecodeRoundTripWithoutPool(t *testing.T) {
 	enc := NewEncoder(NewBaseOptions().SetBytesPool(nil)).(*encoder)
 	require.Equal(t, 4, len(enc.buffer))
 	require.Equal(t, 4, cap(enc.buffer))
+	require.Empty(t, enc.Bytes())
 	r := bytes.NewReader(nil)
 	dec := NewDecoder(r, NewBaseOptions().SetBytesPool(nil)).(*decoder)
 	require.Equal(t, 4, len(dec.buffer))
@@ -47,12 +48,12 @@ func TestBaseEncodeDecodeRoundTripWithoutPool(t *testing.T) {
 	}
 	decodeMsg := msgpb.Message{}
 
-	b, err := enc.Encode(&encodeMsg)
+	err := enc.Encode(&encodeMsg)
 	require.NoError(t, err)
 	require.Equal(t, sizeEncodingLength+encodeMsg.Size(), len(enc.buffer))
 	require.Equal(t, sizeEncodingLength+encodeMsg.Size(), cap(enc.buffer))
 
-	r.Reset(b)
+	r.Reset(enc.Bytes())
 	require.NoError(t, dec.Decode(&decodeMsg))
 	require.Equal(t, sizeEncodingLength+decodeMsg.Size(), len(dec.buffer))
 	require.Equal(t, sizeEncodingLength+encodeMsg.Size(), cap(dec.buffer))
@@ -79,12 +80,12 @@ func TestBaseEncodeDecodeRoundTripWithPool(t *testing.T) {
 	}
 	decodeMsg := msgpb.Message{}
 
-	b, err := enc.Encode(&encodeMsg)
+	err := enc.Encode(&encodeMsg)
 	require.NoError(t, err)
 	require.Equal(t, 100, len(enc.buffer))
 	require.Equal(t, 100, cap(enc.buffer))
 
-	r.Reset(b)
+	r.Reset(enc.Bytes())
 	require.NoError(t, dec.Decode(&decodeMsg))
 	require.Equal(t, 100, len(dec.buffer))
 	require.Equal(t, 100, cap(dec.buffer))
@@ -102,11 +103,11 @@ func TestResetReader(t *testing.T) {
 	}
 	decodeMsg := msgpb.Message{}
 
-	b, err := enc.Encode(&encodeMsg)
+	err := enc.Encode(&encodeMsg)
 	require.NoError(t, err)
 	require.Error(t, dec.Decode(&decodeMsg))
 
-	r2 := bytes.NewReader(b)
+	r2 := bytes.NewReader(enc.Bytes())
 	dec.(*decoder).ResetReader(r2)
 	require.NoError(t, dec.Decode(&decodeMsg))
 }
@@ -122,7 +123,7 @@ func TestEncodeMessageLargerThanMaxSize(t *testing.T) {
 		Value: make([]byte, 10),
 	}
 
-	_, err := enc.Encode(&encodeMsg)
+	err := enc.Encode(&encodeMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "larger than maximum supported size")
 }
@@ -137,12 +138,12 @@ func TestDecodeMessageLargerThanMaxSize(t *testing.T) {
 		Value: make([]byte, 10),
 	}
 
-	b, err := enc.Encode(&encodeMsg)
+	err := enc.Encode(&encodeMsg)
 	require.NoError(t, err)
 
 	decodeMsg := msgpb.Message{}
 	opts := NewBaseOptions().SetMaxMessageSize(4)
-	dec := NewDecoder(bytes.NewReader(b), opts)
+	dec := NewDecoder(bytes.NewReader(enc.Bytes()), opts)
 	err = dec.Decode(&decodeMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "larger than maximum supported size")
