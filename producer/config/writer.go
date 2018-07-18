@@ -81,7 +81,7 @@ type WriterConfiguration struct {
 	TopicName                         string                            `yaml:"topicName" validate:"nonzero"`
 	TopicServiceOverride              kv.OverrideConfiguration          `yaml:"topicServiceOverride"`
 	TopicWatchInitTimeout             *time.Duration                    `yaml:"topicWatchInitTimeout"`
-	PlacementServiceOverride          services.OverrideConfiguration    `yaml:"placementServiceOverride"`
+	PlacementServiceOverride          services.OverrideConfiguration	`yaml:"placementServiceOverride"`
 	PlacementWatchInitTimeout         *time.Duration                    `yaml:"placementWatchInitTimeout"`
 	MessagePool                       *pool.ObjectPoolConfiguration     `yaml:"messagePool"`
 	MessageRetry                      *retry.Configuration              `yaml:"messageRetry"`
@@ -91,7 +91,8 @@ type WriterConfiguration struct {
 	InitialAckMapSize                 *int                              `yaml:"initialAckMapSize"`
 	CloseCheckInterval                *time.Duration                    `yaml:"closeCheckInterval"`
 	AckErrorRetry                     *retry.Configuration              `yaml:"ackErrorRetry"`
-	EncodeDecoder                     *proto.EncodeDecoderConfiguration `yaml:"encodeDecoder"`
+	Encoder                     	  *proto.BaseConfiguration	 		`yaml:"encoder"`
+	Decoder                     	  *proto.BaseConfiguration			`yaml:"decoder"`
 	Connection                        *ConnectionConfiguration          `yaml:"connection"`
 }
 
@@ -149,8 +150,11 @@ func (c *WriterConfiguration) NewOptions(
 	if c.AckErrorRetry != nil {
 		opts = opts.SetAckErrorRetryOptions(c.AckErrorRetry.NewOptions(iOpts.MetricsScope()))
 	}
-	if c.EncodeDecoder != nil {
-		opts = opts.SetEncodeDecoderOptions(c.EncodeDecoder.NewEncodeDecoderOptions(iOpts))
+	if c.Encoder != nil {
+		opts = opts.SetEncoderOptions(c.Encoder.NewBaseOptions(iOpts))
+	}
+	if c.Decoder != nil {
+		opts = opts.SetDecoderOptions(c.Decoder.NewBaseOptions(iOpts))
 	}
 	if c.Connection != nil {
 		opts = opts.SetConnectionOptions(c.Connection.NewOptions(iOpts))

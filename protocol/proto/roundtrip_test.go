@@ -22,6 +22,7 @@ package proto
 
 import (
 	"bytes"
+	"net"
 	"testing"
 
 	"github.com/m3db/m3msg/generated/proto/msgpb"
@@ -147,6 +148,39 @@ func TestDecodeMessageLargerThanMaxSize(t *testing.T) {
 	err = dec.Decode(&decodeMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "larger than maximum supported size")
+}
+
+func TestDecodeReset(t *testing.T) {
+	dec := NewDecoder(nil, nil)
+	require.Nil(t, dec.(*decoder).r)
+
+	conn := new(net.TCPConn)
+	dec.ResetReader(conn)
+	require.Equal(t, conn, dec.(*decoder).r)
+}
+
+func TestEncodeDecodeRoundTrip(t *testing.T) {
+	enc := NewEncoder(nil)
+	dec := NewDecoder(nil, nil)
+
+	clientConn, serverConn := net.Pipe()
+	dec.ResetReader(serverConn)
+
+	testMsg := msgpb.Message{
+		Metadata: msgpb.Metadata{
+			Shard: 1,
+			Id:    2,
+		},
+		Value: make([]byte, 10),
+	}
+	go func() {
+		require.NoError(t, enc.Encode(&testMsg))
+		_, err := clientConn.Write(enc.Bytes())
+		require.NoError(t, err)
+	}()
+	var msg msgpb.Message
+	require.NoError(t, dec.Decode(&msg))
+	require.Equal(t, testMsg, msg)
 }
 
 // nolint: unparam

@@ -27,32 +27,6 @@ import (
 	"github.com/m3db/m3msg/generated/proto/msgpb"
 )
 
-func BenchmarkEncodeDecoderRoundTrip(b *testing.B) {
-	r := bytes.NewReader(nil)
-	c := NewEncodeDecoder(r, NewEncodeDecoderOptions()).(*encdec)
-	encodeMsg := msgpb.Message{
-		Metadata: msgpb.Metadata{},
-		Value:    make([]byte, 200),
-	}
-	decodeMsg := msgpb.Message{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		encodeMsg.Metadata.Id = uint64(n)
-		err := c.Encode(&encodeMsg)
-		if err != nil {
-			b.FailNow()
-		}
-		r.Reset(c.Bytes())
-		if err := c.Decode(&decodeMsg); err != nil {
-			b.FailNow()
-		}
-		if decodeMsg.Metadata.Id != uint64(n) {
-			b.FailNow()
-		}
-	}
-}
-
 func BenchmarkBaseEncodeDecodeRoundTrip(b *testing.B) {
 	r := bytes.NewReader(nil)
 	encoder := NewEncoder(NewBaseOptions())
