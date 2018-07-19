@@ -25,11 +25,13 @@ import (
 	"github.com/m3db/m3x/pool"
 )
 
+// BaseConfiguration configures an Encoder or a Decoder.
 type BaseConfiguration struct {
 	MaxMessageSize    *int                              `yaml:"maxMessageSize"`
 	BytesPool         *pool.BucketizedPoolConfiguration `yaml:"bytesPool"`
 }
 
+// NewBaseOptions creates a new BaseOptions.
 func (c *BaseConfiguration) NewBaseOptions (
 	iOpts instrument.Options,
 ) BaseOptions {
