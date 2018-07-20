@@ -25,21 +25,21 @@ import (
 	"github.com/m3db/m3x/pool"
 )
 
-// BaseConfiguration configures an Encoder or a Decoder.
-type BaseConfiguration struct {
+// Configuration configures an Encoder or a Decoder.
+type Configuration struct {
 	MaxMessageSize    *int                              `yaml:"maxMessageSize"`
 	BytesPool         *pool.BucketizedPoolConfiguration `yaml:"bytesPool"`
 }
 
-// NewBaseOptions creates a new BaseOptions.
-func (c *BaseConfiguration) NewBaseOptions (
+// NewOptions creates a new Options.
+func (c *Configuration) NewOptions (
 	iOpts instrument.Options,
-) BaseOptions {
+) Options {
 	var (
-		baseOpts = NewBaseOptions()
+		opts = NewOptions()
 	)
 	if c.MaxMessageSize != nil {
-		baseOpts = baseOpts.SetMaxMessageSize(*c.MaxMessageSize)
+		opts = opts.SetMaxMessageSize(*c.MaxMessageSize)
 	}
 	if c.BytesPool != nil {
 		scope := iOpts.MetricsScope()
@@ -50,7 +50,7 @@ func (c *BaseConfiguration) NewBaseOptions (
 			))),
 		)
 		p.Init()
-		baseOpts = baseOpts.SetBytesPool(p)
+		opts = opts.SetBytesPool(p)
 	}
-	return baseOpts
+	return opts
 }

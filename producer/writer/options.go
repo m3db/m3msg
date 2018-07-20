@@ -308,13 +308,17 @@ type Options interface {
 	// SetAckErrorRetryOptions sets the retrier for ack errors.
 	SetAckErrorRetryOptions(value retry.Options) Options
 
-	EncoderOptions() proto.BaseOptions
+	// EncoderOptions returns the encoder's options.
+	EncoderOptions() proto.Options
 
-	SetEncoderOptions(value proto.BaseOptions) Options
+	// SetEncoderOptions sets the encoder's options.
+	SetEncoderOptions(value proto.Options) Options
 	
-	DecoderOptions() proto.BaseOptions
+	// EncoderOptions returns the decoder's options.
+	DecoderOptions() proto.Options
 
-	SetDecoderOptions(value proto.BaseOptions) Options
+	// SetEncoderOptions sets the decoder's options.
+	SetDecoderOptions(value proto.Options) Options
 
 	// ConnectionOptions returns the options for connections.
 	ConnectionOptions() ConnectionOptions
@@ -343,8 +347,8 @@ type writerOptions struct {
 	initialAckMapSize                 int
 	closeCheckInterval                time.Duration
 	ackErrRetryOpts                   retry.Options
-	encOpts							  proto.BaseOptions
-	decOpts						      proto.BaseOptions
+	encOpts							  proto.Options
+	decOpts						      proto.Options
 	cOpts                             ConnectionOptions
 	iOpts                             instrument.Options
 }
@@ -361,8 +365,8 @@ func NewOptions() Options {
 		initialAckMapSize:                 defaultInitialAckMapSize,
 		closeCheckInterval:                defaultCloseCheckInterval,
 		ackErrRetryOpts:                   retry.NewOptions(),
-		encOpts:						   proto.NewBaseOptions(),
-		decOpts:						   proto.NewBaseOptions(),
+		encOpts:						   proto.NewOptions(),
+		decOpts:						   proto.NewOptions(),
 		cOpts:                             NewConnectionOptions(),
 		iOpts:                             instrument.NewOptions(),
 	}
@@ -498,21 +502,21 @@ func (opts *writerOptions) SetAckErrorRetryOptions(value retry.Options) Options 
 	return &o
 }
 
-func (opts *writerOptions) EncoderOptions() proto.BaseOptions {
+func (opts *writerOptions) EncoderOptions() proto.Options {
 	return opts.encOpts
 }
 
-func (opts *writerOptions) SetEncoderOptions(value proto.BaseOptions) Options {
+func (opts *writerOptions) SetEncoderOptions(value proto.Options) Options {
 	o := *opts
 	o.encOpts = value
 	return &o
 }
 
-func (opts *writerOptions) DecoderOptions() proto.BaseOptions {
+func (opts *writerOptions) DecoderOptions() proto.Options {
 	return opts.decOpts
 }
 
-func (opts *writerOptions) SetDecoderOptions(value proto.BaseOptions) Options {
+func (opts *writerOptions) SetDecoderOptions(value proto.Options) Options {
 	o := *opts
 	o.decOpts = value
 	return &o

@@ -60,17 +60,17 @@ type Decoder interface {
 	ResetReader(r io.Reader)
 }
 
-// BaseOptions configures a base encoder or decoder.
-type BaseOptions interface {
+// Options configures a encoder or decoder.
+type Options interface {
 	// MaxMessageSize returns the maximum message size.
 	MaxMessageSize() int
 
 	// SetMaxMessageSize sets the maximum message size.
-	SetMaxMessageSize(value int) BaseOptions
+	SetMaxMessageSize(value int) Options
 
 	// BytesPool returns the bytes pool.
 	BytesPool() pool.BytesPool
 
 	// SetBytesPool sets the bytes pool.
-	SetBytesPool(value pool.BytesPool) BaseOptions
+	SetBytesPool(value pool.BytesPool) Options
 }

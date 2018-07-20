@@ -382,8 +382,8 @@ func testConnectionOptions() ConnectionOptions {
 func testConsumeAndAckOnConnection(
 	t *testing.T,
 	conn net.Conn,
-	encOpts proto.BaseOptions,
-	decOpts proto.BaseOptions,
+	encOpts proto.Options,
+	decOpts proto.Options,
 ) {
 	serverEncoder := proto.NewEncoder(encOpts)
 	serverDecoder := proto.NewDecoder(conn, decOpts)
@@ -403,8 +403,8 @@ func testConsumeAndAckOnConnection(
 func testConsumeAndAckOnConnectionListener(
 	t *testing.T,
 	lis net.Listener,
-	encOpts proto.BaseOptions,
-	decOpts proto.BaseOptions,
+	encOpts proto.Options,
+	decOpts proto.Options,
 ) {
 	conn, err := lis.Accept()
 	require.NoError(t, err)

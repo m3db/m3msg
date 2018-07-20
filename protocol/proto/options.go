@@ -34,36 +34,36 @@ var (
 	}
 )
 
-// NewBaseOptions creates a new BaseOptions.
-func NewBaseOptions() BaseOptions {
+// NewOptions creates a new Options.
+func NewOptions() Options {
 	pool := pool.NewBytesPool(defaultByteBuckets, nil)
 	pool.Init()
-	return &baseOptions{
+	return &options{
 		bytesPool:      pool,
 		maxMessageSize: defaultMaxMessageSize,
 	}
 }
 
-type baseOptions struct {
+type options struct {
 	maxMessageSize int
 	bytesPool      pool.BytesPool
 }
 
-func (opts *baseOptions) MaxMessageSize() int {
+func (opts *options) MaxMessageSize() int {
 	return opts.maxMessageSize
 }
 
-func (opts *baseOptions) SetMaxMessageSize(value int) BaseOptions {
+func (opts *options) SetMaxMessageSize(value int) Options {
 	o := *opts
 	o.maxMessageSize = value
 	return &o
 }
 
-func (opts *baseOptions) BytesPool() pool.BytesPool {
+func (opts *options) BytesPool() pool.BytesPool {
 	return opts.bytesPool
 }
 
-func (opts *baseOptions) SetBytesPool(value pool.BytesPool) BaseOptions {
+func (opts *options) SetBytesPool(value pool.BytesPool) Options {
 	o := *opts
 	o.bytesPool = value
 	return &o

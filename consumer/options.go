@@ -36,8 +36,8 @@ var (
 )
 
 type options struct {
-	encOptions		 proto.BaseOptions
-	decOptions		 proto.BaseOptions
+	encOptions		 proto.Options
+	decOptions		 proto.Options
 	messagePoolOpts  pool.ObjectPoolOptions
 	ackFlushInterval time.Duration
 	ackBufferSize    int
@@ -49,8 +49,8 @@ type options struct {
 // NewOptions creates a new options.
 func NewOptions() Options {
 	return &options{
-		encOptions:		  proto.NewBaseOptions(),
-		decOptions:		  proto.NewBaseOptions(),
+		encOptions:		  proto.NewOptions(),
+		decOptions:		  proto.NewOptions(),
 		messagePoolOpts:  pool.NewObjectPoolOptions(),
 		ackFlushInterval: defaultAckFlushInterval,
 		ackBufferSize:    defaultAckBufferSize,
@@ -60,21 +60,21 @@ func NewOptions() Options {
 	}
 }
 
-func (opts *options) EncoderOptions() proto.BaseOptions {
+func (opts *options) EncoderOptions() proto.Options {
 	return opts.encOptions
 }
 
-func (opts *options) SetEncoderOptions(value proto.BaseOptions) Options {
+func (opts *options) SetEncoderOptions(value proto.Options) Options {
 	o := *opts
 	o.encOptions = value
 	return &o
 }
 
-func (opts *options) DecoderOptions() proto.BaseOptions {
+func (opts *options) DecoderOptions() proto.Options {
 	return opts.decOptions
 }
 
-func (opts *options) SetDecoderOptions(value proto.BaseOptions) Options {
+func (opts *options) SetDecoderOptions(value proto.Options) Options {
 	o := *opts
 	o.decOptions = value
 	return &o

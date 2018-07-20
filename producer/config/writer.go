@@ -78,22 +78,22 @@ func (c *ConnectionConfiguration) NewOptions(iOpts instrument.Options) writer.Co
 
 // WriterConfiguration configs the writer options.
 type WriterConfiguration struct {
-	TopicName                         string                            `yaml:"topicName" validate:"nonzero"`
-	TopicServiceOverride              kv.OverrideConfiguration          `yaml:"topicServiceOverride"`
-	TopicWatchInitTimeout             *time.Duration                    `yaml:"topicWatchInitTimeout"`
-	PlacementServiceOverride          services.OverrideConfiguration	`yaml:"placementServiceOverride"`
-	PlacementWatchInitTimeout         *time.Duration                    `yaml:"placementWatchInitTimeout"`
-	MessagePool                       *pool.ObjectPoolConfiguration     `yaml:"messagePool"`
-	MessageRetry                      *retry.Configuration              `yaml:"messageRetry"`
-	MessageQueueNewWritesScanInterval *time.Duration                    `yaml:"messageQueueNewWritesScanInterval"`
-	MessageQueueFullScanInterval      *time.Duration                    `yaml:"messageQueueFullScanInterval"`
-	MessageQueueScanBatchSize         *int                              `yaml:"messageQueueScanBatchSize"`
-	InitialAckMapSize                 *int                              `yaml:"initialAckMapSize"`
-	CloseCheckInterval                *time.Duration                    `yaml:"closeCheckInterval"`
-	AckErrorRetry                     *retry.Configuration              `yaml:"ackErrorRetry"`
-	Encoder                     	  *proto.BaseConfiguration	 		`yaml:"encoder"`
-	Decoder                     	  *proto.BaseConfiguration			`yaml:"decoder"`
-	Connection                        *ConnectionConfiguration          `yaml:"connection"`
+	TopicName                         string                         `yaml:"topicName" validate:"nonzero"`
+	TopicServiceOverride              kv.OverrideConfiguration       `yaml:"topicServiceOverride"`
+	TopicWatchInitTimeout             *time.Duration                 `yaml:"topicWatchInitTimeout"`
+	PlacementServiceOverride          services.OverrideConfiguration `yaml:"placementServiceOverride"`
+	PlacementWatchInitTimeout         *time.Duration                 `yaml:"placementWatchInitTimeout"`
+	MessagePool                       *pool.ObjectPoolConfiguration  `yaml:"messagePool"`
+	MessageRetry                      *retry.Configuration           `yaml:"messageRetry"`
+	MessageQueueNewWritesScanInterval *time.Duration                 `yaml:"messageQueueNewWritesScanInterval"`
+	MessageQueueFullScanInterval      *time.Duration                 `yaml:"messageQueueFullScanInterval"`
+	MessageQueueScanBatchSize         *int                           `yaml:"messageQueueScanBatchSize"`
+	InitialAckMapSize                 *int                           `yaml:"initialAckMapSize"`
+	CloseCheckInterval                *time.Duration                 `yaml:"closeCheckInterval"`
+	AckErrorRetry                     *retry.Configuration           `yaml:"ackErrorRetry"`
+	Encoder                     	  *proto.Configuration           `yaml:"encoder"`
+	Decoder                     	  *proto.Configuration           `yaml:"decoder"`
+	Connection                        *ConnectionConfiguration       `yaml:"connection"`
 }
 
 // NewOptions creates writer options.
@@ -151,10 +151,10 @@ func (c *WriterConfiguration) NewOptions(
 		opts = opts.SetAckErrorRetryOptions(c.AckErrorRetry.NewOptions(iOpts.MetricsScope()))
 	}
 	if c.Encoder != nil {
-		opts = opts.SetEncoderOptions(c.Encoder.NewBaseOptions(iOpts))
+		opts = opts.SetEncoderOptions(c.Encoder.NewOptions(iOpts))
 	}
 	if c.Decoder != nil {
-		opts = opts.SetDecoderOptions(c.Decoder.NewBaseOptions(iOpts))
+		opts = opts.SetDecoderOptions(c.Decoder.NewOptions(iOpts))
 	}
 	if c.Connection != nil {
 		opts = opts.SetConnectionOptions(c.Connection.NewOptions(iOpts))

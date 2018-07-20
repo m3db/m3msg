@@ -29,8 +29,8 @@ import (
 
 func BenchmarkBaseEncodeDecodeRoundTrip(b *testing.B) {
 	r := bytes.NewReader(nil)
-	encoder := NewEncoder(NewBaseOptions())
-	decoder := NewDecoder(r, NewBaseOptions())
+	encoder := NewEncoder(NewOptions())
+	decoder := NewDecoder(r, NewOptions())
 	encodeMsg := msgpb.Message{
 		Metadata: msgpb.Metadata{},
 		Value:    make([]byte, 200),

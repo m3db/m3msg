@@ -29,7 +29,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-func TestBaseConfig(t *testing.T) {
+func TestConfiguration(t *testing.T) {
 	str := `
 maxMessageSize: 1024
 bytesPool:
@@ -43,9 +43,9 @@ bytesPool:
         highWatermark: 0.02
 `
 
-	var cfg BaseConfiguration
+	var cfg Configuration
 	require.NoError(t, yaml.Unmarshal([]byte(str), &cfg))
-	opts := cfg.NewBaseOptions(instrument.NewOptions())
+	opts := cfg.NewOptions(instrument.NewOptions())
 	require.Equal(t, 1024, opts.MaxMessageSize())
 	require.NotNil(t, opts.BytesPool())
 	b := opts.BytesPool().Get(2)

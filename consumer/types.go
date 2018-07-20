@@ -67,16 +67,16 @@ type Listener interface {
 // Options configs the consumer listener.
 type Options interface {
 	// EncoderOptions returns the options for Encoder.
-	EncoderOptions() proto.BaseOptions
+	EncoderOptions() proto.Options
 
 	// SetEncoderOptions sets the options for Encoder.
-	SetEncoderOptions(value proto.BaseOptions) Options	
+	SetEncoderOptions(value proto.Options) Options	
 	
 	// DecoderOptions returns the options for Decoder.
-	DecoderOptions() proto.BaseOptions
+	DecoderOptions() proto.Options
 
 	// SetDecoderOptions sets the options for Decoder.
-	SetDecoderOptions(value proto.BaseOptions) Options
+	SetDecoderOptions(value proto.Options) Options
 
 	// MessagePoolOptions returns the options for message pool.
 	MessagePoolOptions() pool.ObjectPoolOptions
