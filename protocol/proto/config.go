@@ -27,12 +27,12 @@ import (
 
 // Configuration configures an Encoder or a Decoder.
 type Configuration struct {
-	MaxMessageSize    *int                              `yaml:"maxMessageSize"`
-	BytesPool         *pool.BucketizedPoolConfiguration `yaml:"bytesPool"`
+	MaxMessageSize *int                              `yaml:"maxMessageSize"`
+	BytesPool      *pool.BucketizedPoolConfiguration `yaml:"bytesPool"`
 }
 
 // NewOptions creates a new Options.
-func (c *Configuration) NewOptions (
+func (c *Configuration) NewOptions(
 	iOpts instrument.Options,
 ) Options {
 	var (
@@ -46,7 +46,7 @@ func (c *Configuration) NewOptions (
 		p := pool.NewBytesPool(
 			c.BytesPool.NewBuckets(),
 			c.BytesPool.NewObjectPoolOptions(iOpts.SetMetricsScope(scope.Tagged(
-			map[string]string{"pool": "bytes"},
+				map[string]string{"pool": "bytes"},
 			))),
 		)
 		p.Init()

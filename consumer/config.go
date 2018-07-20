@@ -30,7 +30,7 @@ import (
 
 // Configuration configs the consumer options.
 type Configuration struct {
-	Encoder                   *proto.Configuration         `yaml:"encoder"`
+	Encoder                   *proto.Configuration          `yaml:"encoder"`
 	Decoder                   *proto.Configuration          `yaml:"decoder"`
 	MessagePool               *pool.ObjectPoolConfiguration `yaml:"messagePool"`
 	AckFlushInterval          *time.Duration                `yaml:"ackFlushInterval"`

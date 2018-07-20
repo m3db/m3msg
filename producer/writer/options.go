@@ -313,7 +313,7 @@ type Options interface {
 
 	// SetEncoderOptions sets the encoder's options.
 	SetEncoderOptions(value proto.Options) Options
-	
+
 	// EncoderOptions returns the decoder's options.
 	DecoderOptions() proto.Options
 
@@ -347,8 +347,8 @@ type writerOptions struct {
 	initialAckMapSize                 int
 	closeCheckInterval                time.Duration
 	ackErrRetryOpts                   retry.Options
-	encOpts							  proto.Options
-	decOpts						      proto.Options
+	encOpts                           proto.Options
+	decOpts                           proto.Options
 	cOpts                             ConnectionOptions
 	iOpts                             instrument.Options
 }
@@ -365,8 +365,8 @@ func NewOptions() Options {
 		initialAckMapSize:                 defaultInitialAckMapSize,
 		closeCheckInterval:                defaultCloseCheckInterval,
 		ackErrRetryOpts:                   retry.NewOptions(),
-		encOpts:						   proto.NewOptions(),
-		decOpts:						   proto.NewOptions(),
+		encOpts:                           proto.NewOptions(),
+		decOpts:                           proto.NewOptions(),
 		cOpts:                             NewConnectionOptions(),
 		iOpts:                             instrument.NewOptions(),
 	}

@@ -91,8 +91,8 @@ type WriterConfiguration struct {
 	InitialAckMapSize                 *int                           `yaml:"initialAckMapSize"`
 	CloseCheckInterval                *time.Duration                 `yaml:"closeCheckInterval"`
 	AckErrorRetry                     *retry.Configuration           `yaml:"ackErrorRetry"`
-	Encoder                     	  *proto.Configuration           `yaml:"encoder"`
-	Decoder                     	  *proto.Configuration           `yaml:"decoder"`
+	Encoder                           *proto.Configuration           `yaml:"encoder"`
+	Decoder                           *proto.Configuration           `yaml:"decoder"`
 	Connection                        *ConnectionConfiguration       `yaml:"connection"`
 }
 

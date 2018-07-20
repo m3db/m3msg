@@ -70,8 +70,8 @@ type Options interface {
 	EncoderOptions() proto.Options
 
 	// SetEncoderOptions sets the options for Encoder.
-	SetEncoderOptions(value proto.Options) Options	
-	
+	SetEncoderOptions(value proto.Options) Options
+
 	// DecoderOptions returns the options for Decoder.
 	DecoderOptions() proto.Options
 

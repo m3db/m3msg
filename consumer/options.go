@@ -36,8 +36,8 @@ var (
 )
 
 type options struct {
-	encOptions		 proto.Options
-	decOptions		 proto.Options
+	encOptions       proto.Options
+	decOptions       proto.Options
 	messagePoolOpts  pool.ObjectPoolOptions
 	ackFlushInterval time.Duration
 	ackBufferSize    int
@@ -49,8 +49,8 @@ type options struct {
 // NewOptions creates a new options.
 func NewOptions() Options {
 	return &options{
-		encOptions:		  proto.NewOptions(),
-		decOptions:		  proto.NewOptions(),
+		encOptions:       proto.NewOptions(),
+		decOptions:       proto.NewOptions(),
 		messagePoolOpts:  pool.NewObjectPoolOptions(),
 		ackFlushInterval: defaultAckFlushInterval,
 		ackBufferSize:    defaultAckBufferSize,

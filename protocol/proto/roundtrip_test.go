@@ -150,15 +150,6 @@ func TestDecodeMessageLargerThanMaxSize(t *testing.T) {
 	require.Contains(t, err.Error(), "larger than maximum supported size")
 }
 
-func TestDecodeReset(t *testing.T) {
-	dec := NewDecoder(nil, nil)
-	require.Nil(t, dec.(*decoder).r)
-
-	conn := new(net.TCPConn)
-	dec.ResetReader(conn)
-	require.Equal(t, conn, dec.(*decoder).r)
-}
-
 func TestEncodeDecodeRoundTrip(t *testing.T) {
 	enc := NewEncoder(nil)
 	dec := NewDecoder(nil, nil)
