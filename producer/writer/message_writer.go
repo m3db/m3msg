@@ -163,6 +163,7 @@ type messageWriterImpl struct {
 	wg               sync.WaitGroup
 	m                messageWriterMetrics
 	nextFullScan     time.Time
+	lastNewWrite     *list.Element
 
 	nowFn clock.NowFn
 }
@@ -216,7 +217,12 @@ func (w *messageWriterImpl) Write(rm *producer.RefCountedMessage) {
 	}
 	msg.Set(meta, rm, nowNanos)
 	w.acks.add(meta, msg)
-	w.queue.PushFront(msg)
+	// Make sure all the new writes are ordered in queue.
+	if w.lastNewWrite != nil {
+		w.lastNewWrite = w.queue.InsertAfter(msg, w.lastNewWrite)
+	} else {
+		w.lastNewWrite = w.queue.PushFront(msg)
+	}
 	w.Unlock()
 }
 
@@ -332,6 +338,7 @@ func (w *messageWriterImpl) scanMessageQueueUntilClose() {
 func (w *messageWriterImpl) scanMessageQueue() {
 	w.RLock()
 	e := w.queue.Front()
+	w.lastNewWrite = nil
 	isClosed := w.isClosed
 	w.RUnlock()
 	var (

@@ -503,6 +503,47 @@ func TestMessageWriterCutoverCutoff(t *testing.T) {
 	require.Equal(t, 0, w.queue.Len())
 }
 
+func TestMessageWriterKeepNewWritesInOrderInFrontOfTheQueue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	opts := testOptions().SetMessageRetryOptions(
+		retry.NewOptions().SetInitialBackoff(2 * time.Nanosecond).SetMaxBackoff(5 * time.Nanosecond),
+	)
+	w := newMessageWriter(200, testMessagePool(opts), opts, testMessageWriterMetrics()).(*messageWriterImpl)
+
+	now := time.Now()
+	w.nowFn = func() time.Time { return now }
+
+	mm1 := producer.NewMockMessage(ctrl)
+	mm1.EXPECT().Size().Return(3)
+	rm1 := producer.NewRefCountedMessage(mm1, nil)
+	mm1.EXPECT().Bytes().Return([]byte("1"))
+	w.Write(rm1)
+
+	mm2 := producer.NewMockMessage(ctrl)
+	mm2.EXPECT().Size().Return(3)
+	rm2 := producer.NewRefCountedMessage(mm2, nil)
+	mm2.EXPECT().Bytes().Return([]byte("2"))
+	w.Write(rm2)
+	w.scanBatchWithLock(w.queue.Front(), w.nowFn().UnixNano(), 2, true)
+	require.Equal(t, []*producer.RefCountedMessage{rm1, rm2}, messagesInList(w))
+
+	mm3 := producer.NewMockMessage(ctrl)
+	mm3.EXPECT().Size().Return(3)
+	rm3 := producer.NewRefCountedMessage(mm3, nil)
+	mm3.EXPECT().Bytes().Return([]byte("3"))
+	w.Write(rm3)
+
+	mm4 := producer.NewMockMessage(ctrl)
+	mm4.EXPECT().Size().Return(3)
+	rm4 := producer.NewRefCountedMessage(mm4, nil)
+	mm4.EXPECT().Bytes().Return([]byte("4"))
+	w.Write(rm4)
+
+	require.Equal(t, []*producer.RefCountedMessage{rm3, rm4, rm1, rm2}, messagesInList(w))
+}
+
 func TestMessageWriterRetryIterateBatchFullScan(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -540,15 +581,16 @@ func TestMessageWriterRetryIterateBatchFullScan(t *testing.T) {
 	mm4.EXPECT().Bytes().Return([]byte("4"))
 	w.Write(rm4)
 
-	mm4.EXPECT().Finalize(gomock.Eq(producer.Dropped))
-	rm4.Drop()
+	require.Equal(t, []*producer.RefCountedMessage{rm1, rm2, rm3, rm4}, messagesInList(w))
+	mm1.EXPECT().Finalize(gomock.Eq(producer.Dropped))
+	rm1.Drop()
 	require.Equal(t, 4, w.queue.Len())
 	e, toBeRetried := w.scanBatchWithLock(w.queue.Front(), w.nowFn().UnixNano(), retryBatchSize, true)
 	require.Equal(t, 1, len(toBeRetried))
 	require.Equal(t, 3, w.queue.Len())
 
-	// Make sure it stopped at rm2.
-	require.Equal(t, rm2, e.Value.(*message).RefCountedMessage)
+	// Make sure it stopped at rm3.
+	require.Equal(t, rm3, e.Value.(*message).RefCountedMessage)
 
 	require.Equal(t, 3, w.queue.Len())
 	e, toBeRetried = w.scanBatchWithLock(e, w.nowFn().UnixNano(), retryBatchSize, true)
@@ -557,8 +599,8 @@ func TestMessageWriterRetryIterateBatchFullScan(t *testing.T) {
 	require.Equal(t, 3, w.queue.Len())
 
 	e, toBeRetried = w.scanBatchWithLock(w.queue.Front(), w.nowFn().UnixNano(), retryBatchSize, true)
-	// Make sure it stopped at rm1.
-	require.Equal(t, rm1, e.Value.(*message).RefCountedMessage)
+	// Make sure it stopped at rm4.
+	require.Equal(t, rm4, e.Value.(*message).RefCountedMessage)
 	require.Equal(t, 0, len(toBeRetried))
 
 	e, toBeRetried = w.scanBatchWithLock(e, w.nowFn().UnixNano(), retryBatchSize, true)
@@ -786,4 +828,14 @@ func testMessagePool(opts Options) messagePool {
 
 func testMessageWriterMetrics() messageWriterMetrics {
 	return newMessageWriterMetrics(tally.NoopScope, 1)
+}
+
+func messagesInList(w *messageWriterImpl) []*producer.RefCountedMessage {
+	w.RLock()
+	res := make([]*producer.RefCountedMessage, 0, w.queue.Len())
+	for e := w.queue.Front(); e != nil; e = e.Next() {
+		res = append(res, e.Value.(*message).RefCountedMessage)
+	}
+	w.RUnlock()
+	return res
 }
