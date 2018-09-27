@@ -42,7 +42,8 @@ var (
 )
 
 type messageWriter interface {
-	// Write writes the message.
+	// Write writes a message, messages not acknowledged in time will be retried.
+	// New messages will be written in order, but retries could be out of order.
 	Write(rm *producer.RefCountedMessage)
 
 	// Ack acknowledges the metadata.
